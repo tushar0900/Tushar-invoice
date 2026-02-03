@@ -1,9 +1,0 @@
-node_modules/
-**/node_modules/
-.DS_Store
-dist/
-.env
-.idea/
-.vscode/
-# ignore any stray git dirs inside subprojects
-.git
