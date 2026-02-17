@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import html2pdf from "html2pdf.js";
+import API_BASE_URL from "./api";
 import "./App.css";
 
 export default function Invoice() {
@@ -26,9 +27,7 @@ export default function Invoice() {
   // Generate next invoice number
   const generateInvoiceNumber = async () => {
     try {
-      const res = await axios.get(
-        "http://localhost:5000/api/invoices/generate/number"
-      );
+      const res = await axios.get(`${API_BASE_URL}/api/invoices/generate/number`);
       setInvoiceNo(res.data.invoiceNumber);
     } catch (error) {
       console.error("Error generating invoice number (backend failed):", error);
@@ -53,9 +52,7 @@ export default function Invoice() {
   // Fetch customer by mobile number
   const fetchCustomer = async () => {
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/customers/mobile/${mobile}`
-      );
+      const res = await axios.get(`${API_BASE_URL}/api/customers/mobile/${mobile}`);
       setName(res.data.name);
       setAddress(res.data.address);
       setGstNo(res.data.gstNumber);
@@ -123,7 +120,7 @@ export default function Invoice() {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/invoices",
+        `${API_BASE_URL}/api/invoices`,
         {
           invoiceNumber: invoiceNo,
           lineItems: lineItems,

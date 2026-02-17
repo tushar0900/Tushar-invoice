@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import API_BASE_URL from "./api";
 import "./App.css";
 
 export default function Customer() {
@@ -30,7 +31,7 @@ export default function Customer() {
     }
 
     try {
-      await axios.post("http://localhost:5000/api/customers", formData);
+      await axios.post(`${API_BASE_URL}/api/customers`, formData);
       alert("Customer added successfully");
 
       setFormData({
