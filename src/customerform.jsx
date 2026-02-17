@@ -47,9 +47,11 @@ export default function Customer() {
       }
     } catch (error) {
       if (error.response?.status === 400) {
-        alert("Error: Mobile number already exists");
+        alert(error.response?.data?.error || "Error: Mobile number already exists");
+      } else if (!error.response) {
+        alert("Unable to reach server. Please try again.");
       } else {
-        alert("Error: " + error.message);
+        alert("Error: " + (error.response?.data?.error || error.message));
       }
     }
   };

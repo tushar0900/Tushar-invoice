@@ -56,11 +56,22 @@ export default function Invoice() {
       setName(res.data.name);
       setAddress(res.data.address);
       setGstNo(res.data.gstNumber);
-    } catch {
+    } catch (error) {
       setName("");
       setAddress("");
       setGstNo("");
-      alert("Customer not found");
+
+      if (error.response?.status === 404) {
+        alert("Customer not found");
+        return;
+      }
+
+      if (!error.response) {
+        alert("Unable to reach server. Please try again.");
+        return;
+      }
+
+      alert(error.response?.data?.error || "Error fetching customer");
     }
   };
 
