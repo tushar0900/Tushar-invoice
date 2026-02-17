@@ -1,11 +1,11 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: '/',
+export default defineConfig(({ mode }) => ({
+  base: mode === "production" ? "/Tushar-invoice/" : "/",
   build: {
     chunkSizeWarningLimit: 1500,
   },
   plugins: [react()],
-})
+}));
