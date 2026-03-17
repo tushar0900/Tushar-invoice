@@ -1,19 +1,19 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import API_BASE_URL from "./api";
+import { loadUsers, saveUsers } from "./authStorage";
 import "./App.css";
 
-export default function Customer() {
+export default function Signup() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [formData, setFormData] = useState({
     mobileNumber: "",
     name: "",
+    password: "",
     address: "",
     gstNumber: "",
   });
-  
 
   const handleChange = (e) => {
     setFormData({
@@ -25,26 +25,51 @@ export default function Customer() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.mobileNumber || !formData.name) {
-      alert("Mobile number and name are required");
+    const cleaned = {
+      mobileNumber: formData.mobileNumber.trim(),
+      name: formData.name.trim(),
+      password: formData.password,
+      address: formData.address.trim(),
+      gstNumber: formData.gstNumber.trim(),
+    };
+
+    if (!cleaned.mobileNumber || !cleaned.name || !cleaned.password) {
+      alert("Mobile number, name, and password are required");
+      return;
+    }
+
+    const users = loadUsers();
+    const normalizedName = cleaned.name.toLowerCase();
+
+    if (users.some((user) => user.name.toLowerCase() === normalizedName)) {
+      alert("Name already registered. Please login.");
+      return;
+    }
+
+    if (users.some((user) => user.mobileNumber === cleaned.mobileNumber)) {
+      alert("Mobile number already registered. Please login.");
       return;
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/api/customers`, formData);
-      alert("Customer added successfully");
-
-      setFormData({
-        mobileNumber: "",
-        name: "",
-        address: "",
-        gstNumber: "",
+      await axios.post(`${API_BASE_URL}/api/customers`, {
+        mobileNumber: cleaned.mobileNumber,
+        name: cleaned.name,
+        address: cleaned.address,
+        gstNumber: cleaned.gstNumber,
       });
 
-      // Auto-redirect to invoice page if coming from there
-      if (location.state?.from === "invoice") {
-        setTimeout(() => navigate("/invoice"), 500);
-      }
+      const newUser = {
+        name: cleaned.name,
+        password: cleaned.password,
+        mobileNumber: cleaned.mobileNumber,
+        address: cleaned.address,
+        gstNumber: cleaned.gstNumber,
+      };
+
+      saveUsers([...users, newUser]);
+      alert("Registration successful. Please login.");
+      navigate("/login", { state: { registeredName: cleaned.name } });
     } catch (error) {
       if (error.response?.status === 400) {
         alert(error.response?.data?.error || "Error: Mobile number already exists");
@@ -58,7 +83,7 @@ export default function Customer() {
 
   return (
     <form className="customer-form" onSubmit={handleSubmit}>
-      <h3>Customer Details</h3>
+      <h3>Customer Sign Up</h3>
 
       <div className="row">
         <label>Customer Mobile Number:</label>
@@ -82,11 +107,23 @@ export default function Customer() {
       </div>
 
       <div className="row">
+        <label>Password:</label>
+        <input
+          type="password"
+          name="password"
+          value={formData.password}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div className="row">
         <label>Address:</label>
         <input
           name="address"
           value={formData.address}
           onChange={handleChange}
+          required
         />
       </div>
 
@@ -97,21 +134,20 @@ export default function Customer() {
           value={formData.gstNumber}
           onChange={handleChange}
           maxLength={15}
+          required
         />
       </div>
 
       <div className="button-group">
-        <button type="submit">SAVE</button>
+        <button type="submit">SIGN UP</button>
         <button
           type="button"
           className="secondary-btn"
-          onClick={() => navigate("/invoice")}
+          onClick={() => navigate("/login")}
         >
-          Go to Invoice
+          Go to Login
         </button>
       </div>
-
-      {/* Removed customer list view - customers are added via the form only */}
     </form>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
+import { getAuthUser } from "./authStorage";
 import "./App.css";
 
 export default function Invoice() {
@@ -23,6 +24,19 @@ export default function Invoice() {
   useEffect(() => {
     generateInvoiceNumber();
   }, []);
+
+  useEffect(() => {
+    const storedUser = getAuthUser();
+    if (!storedUser) {
+      navigate("/login");
+      return;
+    }
+
+    setMobile(storedUser.mobileNumber || "");
+    setName(storedUser.name || "");
+    setAddress(storedUser.address || "");
+    setGstNo(storedUser.gstNumber || "");
+  }, [navigate]);
 
   // Generate next invoice number
   const generateInvoiceNumber = async () => {
@@ -81,6 +95,18 @@ export default function Invoice() {
     setName("");
     setAddress("");
     setGstNo("");
+  };
+
+  const restoreLoggedInCustomer = () => {
+    const storedUser = getAuthUser();
+    if (!storedUser) {
+      return;
+    }
+
+    setMobile(storedUser.mobileNumber || "");
+    setName(storedUser.name || "");
+    setAddress(storedUser.address || "");
+    setGstNo(storedUser.gstNumber || "");
   };
 
   // Handle line item change
@@ -145,10 +171,7 @@ export default function Invoice() {
 
       // Reset form
       setInvoiceNo("");
-      setMobile("");
-      setName("");
-      setAddress("");
-      setGstNo("");
+      restoreLoggedInCustomer();
       setLineItems([{ product: "", rate: 0, quantity: 0, total: 0 }]);
       setGstRate(5);
     } catch (error) {
@@ -306,7 +329,7 @@ export default function Invoice() {
             <button
               type="button"
               className="link-button"
-              onClick={() => navigate("/", { state: { from: "invoice" } })}
+              onClick={() => navigate("/signup")}
             >
               Add New Customer
             </button>
