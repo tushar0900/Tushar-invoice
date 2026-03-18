@@ -66,11 +66,14 @@ small { color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 .field-stack {
   flex: 1;
+  width: 100%;
+  min-width: 0;
 }
 
 .input-with-action {
   position: relative;
   width: 100%;
+  flex: 1;
 }
 
 /* Input fields */
@@ -86,6 +89,8 @@ select {
   transition: all 200ms ease;
   background: #fff;
   font-family: var(--font);
+  min-height: 42px;
+  box-sizing: border-box;
 }
 
 .row input:focus,
@@ -130,8 +135,11 @@ select:focus {
 }
 
 .input-with-action input {
+  display: block;
   width: 100%;
   padding-right: 44px;
+  min-height: 42px;
+  box-sizing: border-box;
 }
 
 .field-hint {
