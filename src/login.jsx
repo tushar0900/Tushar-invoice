@@ -8,6 +8,7 @@ import "./App.css";
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: location.state?.registeredName || "",
     password: "",
@@ -78,13 +79,24 @@ export default function Login() {
 
       <div className="row">
         <label>Password:</label>
-        <input
-          type="password"
-          name="password"
-          value={formData.password}
-          onChange={handleChange}
-          required
-        />
+        <div className="field-stack">
+          <div className="input-with-action">
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+            />
+            <button
+              type="button"
+              className="input-inline-action"
+              onClick={() => setShowPassword((currentValue) => !currentValue)}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="button-group">

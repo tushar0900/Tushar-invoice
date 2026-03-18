@@ -3,6 +3,10 @@ import bcrypt from "bcryptjs";
 import Customer from "../models/customer.js";
 
 const router = express.Router();
+const passwordPolicy =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8}$/;
+const passwordPolicyMessage =
+  "Password must be exactly 8 characters and include uppercase, lowercase, number, and special character.";
 
 function sanitizeCustomer(customer) {
   if (!customer) {
@@ -29,6 +33,10 @@ function getDuplicateFieldMessage(field) {
   return "Customer already exists.";
 }
 
+function isValidPassword(password) {
+  return passwordPolicy.test(password || "");
+}
+
 // Create Customer
 router.post("/", async (req, res) => {
   try {
@@ -44,6 +52,10 @@ router.post("/", async (req, res) => {
         error:
           "Mobile number, name, company name, password, address, and GST number are required.",
       });
+    }
+
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ error: passwordPolicyMessage });
     }
 
     const existingByMobile = await Customer.findOne({ mobileNumber });
@@ -165,6 +177,10 @@ router.put("/:id", async (req, res) => {
     const updateData = { ...req.body };
 
     if (updateData.password) {
+      if (!isValidPassword(updateData.password)) {
+        return res.status(400).json({ error: passwordPolicyMessage });
+      }
+
       updateData.password = await bcrypt.hash(updateData.password, 10);
     }
 

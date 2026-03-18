@@ -4,8 +4,14 @@ import axios from "axios";
 import API_BASE_URL from "./api";
 import "./App.css";
 
+const passwordPolicy =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8}$/;
+const passwordPolicyMessage =
+  "Password must be exactly 8 characters and include uppercase, lowercase, number, and special character.";
+
 export default function Signup() {
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     mobileNumber: "",
     name: "",
@@ -36,6 +42,11 @@ export default function Signup() {
 
     if (!cleaned.mobileNumber || !cleaned.name || !cleaned.companyName || !cleaned.password) {
       alert("Mobile number, name, company name, and password are required");
+      return;
+    }
+
+    if (!passwordPolicy.test(cleaned.password)) {
+      alert(passwordPolicyMessage);
       return;
     }
 
@@ -98,13 +109,28 @@ export default function Signup() {
 
       <div className="row">
         <label>Password:</label>
-        <input
-          type="password"
-          name="password"
-          value={formData.password}
-          onChange={handleChange}
-          required
-        />
+        <div className="field-stack">
+          <div className="input-with-action">
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              maxLength={8}
+              required
+            />
+            <button
+              type="button"
+              className="input-inline-action"
+              onClick={() => setShowPassword((currentValue) => !currentValue)}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+          <small className="field-hint">
+            Use exactly 8 characters with uppercase, lowercase, number, and special character.
+          </small>
+        </div>
       </div>
 
       <div className="row">
