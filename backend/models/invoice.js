@@ -26,6 +26,11 @@ const invoice = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    companyName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     lineItems: [lineItemSchema],
     gstSlab: {
       type: Number,

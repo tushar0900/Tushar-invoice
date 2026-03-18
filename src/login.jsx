@@ -5,6 +5,49 @@ import API_BASE_URL from "./api";
 import { setAuthUser } from "./authStorage";
 import "./App.css";
 
+function PasswordVisibilityIcon({ visible }) {
+  if (visible) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M3 3l18 18"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10.6 6.2A10.6 10.6 0 0 1 12 6c5.5 0 9 6 9 6a18 18 0 0 1-3.1 3.8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.7 6.7C4.4 8.2 3 12 3 12s3.5 6 9 6c1.5 0 2.9-.4 4.1-1.1"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,7 +84,6 @@ export default function Login() {
       setAuthUser({
         _id: response.data._id,
         name: response.data.name,
-        companyName: response.data.companyName,
         mobileNumber: response.data.mobileNumber,
         address: response.data.address,
         gstNumber: response.data.gstNumber,
@@ -91,9 +133,11 @@ export default function Login() {
             <button
               type="button"
               className="input-inline-action"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
               onClick={() => setShowPassword((currentValue) => !currentValue)}
             >
-              {showPassword ? "Hide" : "Show"}
+              <PasswordVisibilityIcon visible={showPassword} />
             </button>
           </div>
         </div>

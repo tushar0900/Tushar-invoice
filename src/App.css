@@ -69,9 +69,8 @@ small { color: var(--muted); font-size: 13px; line-height: 1.5; }
 }
 
 .input-with-action {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  position: relative;
+  width: 100%;
 }
 
 /* Input fields */
@@ -105,16 +104,34 @@ select:focus {
 }
 
 .input-inline-action {
-  white-space: nowrap;
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   background: transparent;
   color: var(--accent-strong);
-  border: 1.5px solid var(--border);
-  padding: 10px 14px;
+  border: none;
+  padding: 0;
 }
 
 .input-inline-action:hover {
-  background: rgba(44,122,123,0.06);
-  border-color: var(--accent);
+  background: rgba(44,122,123,0.08);
+}
+
+.input-inline-action svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+.input-with-action input {
+  width: 100%;
+  padding-right: 44px;
 }
 
 .field-hint {
@@ -757,12 +774,6 @@ button:focus {
     width: 100%;
   }
 
-  .input-with-action {
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
   button {
     width: 100%;
   }
@@ -776,6 +787,10 @@ button:focus {
   .toolbar-actions button,
   .history-actions button {
     width: 100%;
+  }
+
+  .input-inline-action {
+    width: 32px;
   }
 
   .toolbar-actions {

@@ -50,7 +50,7 @@ export default function Invoice() {
         return;
       }
 
-      if (storedUser._id && typeof storedUser.companyName === "string") {
+      if (storedUser._id) {
         if (isActive) {
           applyLoggedInCustomer(storedUser);
         }
@@ -64,7 +64,6 @@ export default function Invoice() {
         const hydratedUser = {
           _id: response.data._id,
           name: response.data.name,
-          companyName: response.data.companyName,
           mobileNumber: response.data.mobileNumber,
           address: response.data.address,
           gstNumber: response.data.gstNumber,
@@ -101,7 +100,6 @@ export default function Invoice() {
     setLoggedInUser(user);
     setMobile(user.mobileNumber || "");
     setName(user.name || "");
-    setCompanyName(user.companyName || "");
     setAddress(user.address || "");
     setGstNo(user.gstNumber || "");
   };
@@ -178,6 +176,7 @@ export default function Invoice() {
   };
 
   const resetInvoiceForm = async () => {
+    setCompanyName("");
     setLineItems(createInitialLineItems());
     setGstRate(5);
     await generateInvoiceNumber();
@@ -204,7 +203,7 @@ export default function Invoice() {
           <h4 style="margin:0 0 14px;color:#225e60;text-transform:uppercase;font-size:16px;">Customer Information</h4>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div><strong>Name:</strong><br />${invoiceCustomer.name || name}</div>
-            <div><strong>Company Name:</strong><br />${invoiceCustomer.companyName || companyName || name}</div>
+            <div><strong>Company Name:</strong><br />${invoice.companyName || "-"}</div>
             <div><strong>Address:</strong><br />${invoiceCustomer.address || address}</div>
             <div><strong>GST Number:</strong><br />${invoiceCustomer.gstNumber || gstNo}</div>
           </div>
@@ -274,7 +273,7 @@ export default function Invoice() {
   const handleSave = async (e) => {
     e.preventDefault();
 
-    if (!invoiceNo || !loggedInUser?.mobileNumber || lineItems.length === 0) {
+    if (!invoiceNo || !loggedInUser?.mobileNumber || !companyName.trim() || lineItems.length === 0) {
       alert("Please fill all required fields");
       return;
     }
@@ -291,6 +290,7 @@ export default function Invoice() {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/invoices`, {
         invoiceNumber: invoiceNo,
+        companyName: companyName.trim(),
         lineItems,
         gstSlab: gstRate,
         totalPrice: grandTotal,
@@ -299,10 +299,10 @@ export default function Invoice() {
 
       const savedInvoice = {
         ...response.data,
+        companyName: response.data.companyName || companyName.trim(),
         customerId: {
           _id: loggedInUser._id,
           name: loggedInUser.name,
-          companyName: loggedInUser.companyName,
           mobileNumber: loggedInUser.mobileNumber,
           address: loggedInUser.address,
           gstNumber: loggedInUser.gstNumber,
@@ -397,10 +397,6 @@ export default function Invoice() {
                 <span>{name}</span>
               </div>
               <div className="detail-item">
-                <label>Company Name:</label>
-                <span>{companyName || name}</span>
-              </div>
-              <div className="detail-item">
                 <label>Address:</label>
                 <span>{address}</span>
               </div>
@@ -408,6 +404,16 @@ export default function Invoice() {
                 <label>GST Number:</label>
                 <span>{gstNo}</span>
               </div>
+            </div>
+
+            <div className="row single">
+              <label>Company Name</label>
+              <input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Enter company name for this invoice"
+                required
+              />
             </div>
           </div>
 
@@ -433,7 +439,7 @@ export default function Invoice() {
                 </div>
                 <div className="detail-item">
                   <label>Company Name:</label>
-                  <span>{companyName || name}</span>
+                  <span>{companyName || "-"}</span>
                 </div>
                 <div className="detail-item">
                   <label>Address:</label>
@@ -671,9 +677,7 @@ export default function Invoice() {
                       </div>
                       <div className="detail-item">
                         <label>Company Name:</label>
-                        <span>
-                          {selectedHistoryInvoice.customerId?.companyName || companyName || name}
-                        </span>
+                        <span>{selectedHistoryInvoice.companyName || "-"}</span>
                       </div>
                       <div className="detail-item">
                         <label>Mobile Number:</label>

@@ -3,7 +3,7 @@ import Invoice from "../models/invoice.js";
 import Customer from "../models/customer.js";
 
 const router = express.Router();
-const invoiceCustomerSelection = "name companyName mobileNumber address gstNumber";
+const invoiceCustomerSelection = "name mobileNumber address gstNumber";
 
 // Generate next invoice number
 router.get("/generate/number", async (req, res) => {
@@ -30,6 +30,8 @@ router.get("/generate/number", async (req, res) => {
 // Create Invoice
 router.post("/", async (req, res) => {
   try {
+    const companyName = req.body.companyName?.trim();
+
     // Find customer by mobile number
     const customer = await Customer.findOne({
       mobileNumber: req.body.customerMobileNumber,
@@ -39,9 +41,14 @@ router.post("/", async (req, res) => {
       return res.status(404).json({ error: "Customer not found" });
     }
 
+    if (!companyName) {
+      return res.status(400).json({ error: "Company name is required." });
+    }
+
     // Create invoice with lineItems array
     const invoiceData = {
       invoiceNumber: req.body.invoiceNumber,
+      companyName,
       lineItems: req.body.lineItems, // Array of line items
       gstSlab: req.body.gstSlab,
       totalPrice: req.body.totalPrice,

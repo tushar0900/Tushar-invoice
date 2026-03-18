@@ -42,15 +42,13 @@ router.post("/", async (req, res) => {
   try {
     const mobileNumber = req.body.mobileNumber?.trim();
     const name = req.body.name?.trim();
-    const companyName = req.body.companyName?.trim();
     const password = req.body.password;
     const address = req.body.address?.trim();
     const gstNumber = req.body.gstNumber?.trim();
 
-    if (!mobileNumber || !name || !companyName || !password || !address || !gstNumber) {
+    if (!mobileNumber || !name || !password || !address || !gstNumber) {
       return res.status(400).json({
-        error:
-          "Mobile number, name, company name, password, address, and GST number are required.",
+        error: "Mobile number, name, password, address, and GST number are required.",
       });
     }
 
@@ -62,7 +60,6 @@ router.post("/", async (req, res) => {
     if (existingByMobile) {
       if (!existingByMobile.password) {
         existingByMobile.name = name;
-        existingByMobile.companyName = companyName;
         existingByMobile.password = await bcrypt.hash(password, 10);
         existingByMobile.address = address;
         existingByMobile.gstNumber = gstNumber;
@@ -88,7 +85,6 @@ router.post("/", async (req, res) => {
     const customer = await Customer.create({
       mobileNumber,
       name,
-      companyName,
       password: await bcrypt.hash(password, 10),
       address,
       gstNumber,
