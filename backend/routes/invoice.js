@@ -3,7 +3,7 @@ import Invoice from "../models/invoice.js";
 import Customer from "../models/customer.js";
 
 const router = express.Router();
-const invoiceCustomerSelection = "name mobileNumber address gstNumber";
+const invoiceCustomerSelection = "name companyName mobileNumber address gstNumber";
 
 // Generate next invoice number
 router.get("/generate/number", async (req, res) => {

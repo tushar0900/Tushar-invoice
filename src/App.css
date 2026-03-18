@@ -560,6 +560,23 @@ button:focus {
   margin-top: 24px;
 }
 
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-download-btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.history-detail-actions {
+  justify-content: flex-start;
+}
+
 .history-active {
   box-shadow: 0 0 0 2px rgba(44,122,123,0.12);
 }
@@ -720,7 +737,8 @@ button:focus {
 
   .button-group button,
   .btn-row button,
-  .toolbar-actions button {
+  .toolbar-actions button,
+  .history-actions button {
     width: 100%;
   }
 

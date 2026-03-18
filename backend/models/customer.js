@@ -13,6 +13,11 @@ const customer = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    companyName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     password: {
       type: String,
       required: true,

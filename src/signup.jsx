@@ -9,6 +9,7 @@ export default function Signup() {
   const [formData, setFormData] = useState({
     mobileNumber: "",
     name: "",
+    companyName: "",
     password: "",
     address: "",
     gstNumber: "",
@@ -27,13 +28,14 @@ export default function Signup() {
     const cleaned = {
       mobileNumber: formData.mobileNumber.trim(),
       name: formData.name.trim(),
+      companyName: formData.companyName.trim(),
       password: formData.password,
       address: formData.address.trim(),
       gstNumber: formData.gstNumber.trim(),
     };
 
-    if (!cleaned.mobileNumber || !cleaned.name || !cleaned.password) {
-      alert("Mobile number, name, and password are required");
+    if (!cleaned.mobileNumber || !cleaned.name || !cleaned.companyName || !cleaned.password) {
+      alert("Mobile number, name, company name, and password are required");
       return;
     }
 
@@ -41,6 +43,7 @@ export default function Signup() {
       await axios.post(`${API_BASE_URL}/api/customers`, {
         mobileNumber: cleaned.mobileNumber,
         name: cleaned.name,
+        companyName: cleaned.companyName,
         password: cleaned.password,
         address: cleaned.address,
         gstNumber: cleaned.gstNumber,
@@ -78,6 +81,16 @@ export default function Signup() {
         <input
           name="name"
           value={formData.name}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div className="row">
+        <label>Company Name:</label>
+        <input
+          name="companyName"
+          value={formData.companyName}
           onChange={handleChange}
           required
         />

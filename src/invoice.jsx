@@ -21,6 +21,7 @@ export default function Invoice() {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [mobile, setMobile] = useState("");
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [address, setAddress] = useState("");
   const [gstNo, setGstNo] = useState("");
   const [lineItems, setLineItems] = useState(createInitialLineItems);
@@ -49,7 +50,7 @@ export default function Invoice() {
         return;
       }
 
-      if (storedUser._id) {
+      if (storedUser._id && typeof storedUser.companyName === "string") {
         if (isActive) {
           applyLoggedInCustomer(storedUser);
         }
@@ -63,6 +64,7 @@ export default function Invoice() {
         const hydratedUser = {
           _id: response.data._id,
           name: response.data.name,
+          companyName: response.data.companyName,
           mobileNumber: response.data.mobileNumber,
           address: response.data.address,
           gstNumber: response.data.gstNumber,
@@ -99,6 +101,7 @@ export default function Invoice() {
     setLoggedInUser(user);
     setMobile(user.mobileNumber || "");
     setName(user.name || "");
+    setCompanyName(user.companyName || "");
     setAddress(user.address || "");
     setGstNo(user.gstNumber || "");
   };
@@ -180,6 +183,94 @@ export default function Invoice() {
     await generateInvoiceNumber();
   };
 
+  const buildHistoryMarkup = (invoice) => {
+    const invoiceSubtotal = invoice.lineItems.reduce((sum, item) => sum + Number(item.total), 0);
+    const invoiceGstAmount = (invoiceSubtotal * Number(invoice.gstSlab)) / 100;
+    const invoiceCustomer = invoice.customerId || loggedInUser || {};
+
+    return `
+      <div style="padding:20px;background:#fff;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <div style="text-align:center;margin-bottom:30px;">
+          <h1 style="margin:0 0 10px;font-size:28px;font-weight:700;">INVOICE</h1>
+          <p style="margin:0;font-size:14px;color:#666;">
+            Invoice #: <strong>${invoice.invoiceNumber}</strong>
+          </p>
+        </div>
+        <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;">
+          <strong style="min-width:140px;">Invoice Number:</strong>
+          <span>${invoice.invoiceNumber}</span>
+        </div>
+        <div style="border:1px solid #e6eaec;border-left:4px solid #2c7a7b;border-radius:10px;padding:18px;margin-bottom:20px;background:#f7f8f9;">
+          <h4 style="margin:0 0 14px;color:#225e60;text-transform:uppercase;font-size:16px;">Customer Information</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div><strong>Name:</strong><br />${invoiceCustomer.name || name}</div>
+            <div><strong>Company Name:</strong><br />${invoiceCustomer.companyName || companyName || name}</div>
+            <div><strong>Address:</strong><br />${invoiceCustomer.address || address}</div>
+            <div><strong>GST Number:</strong><br />${invoiceCustomer.gstNumber || gstNo}</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+          <thead>
+            <tr>
+              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Product</th>
+              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Rate</th>
+              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Quantity</th>
+              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoice.lineItems
+              .map(
+                (item) => `
+                  <tr>
+                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.product}</td>
+                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.rate).toFixed(2)}</td>
+                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.quantity}</td>
+                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.total).toFixed(2)}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+            <tr>
+              <td colspan="2"></td>
+              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Subtotal:</td>
+              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceSubtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td colspan="2"></td>
+              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">GST (${invoice.gstSlab}%):</td>
+              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceGstAmount.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td colspan="2"></td>
+              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Grand Total:</td>
+              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Rs. ${Number(invoice.totalPrice).toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="border:1px solid #e6eaec;border-radius:10px;padding:18px;background:#f7f8f9;">
+          <strong style="display:block;margin-bottom:10px;">Amount in words</strong>
+          <div>${numberToWords(Number(invoice.totalPrice))}</div>
+        </div>
+      </div>
+    `;
+  };
+
+  const downloadInvoicePdf = (invoice) => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildHistoryMarkup(invoice);
+
+    const options = {
+      margin: 10,
+      filename: `Invoice-${invoice.invoiceNumber}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { orientation: "portrait", unit: "mm", format: "a4" },
+    };
+
+    html2pdf().set(options).from(wrapper).save();
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
 
@@ -198,7 +289,7 @@ export default function Invoice() {
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/api/invoices`, {
+      const response = await axios.post(`${API_BASE_URL}/api/invoices`, {
         invoiceNumber: invoiceNo,
         lineItems,
         gstSlab: gstRate,
@@ -206,9 +297,23 @@ export default function Invoice() {
         customerMobileNumber: loggedInUser.mobileNumber,
       });
 
-      await fetchInvoiceHistory(loggedInUser._id);
-      await resetInvoiceForm();
+      const savedInvoice = {
+        ...response.data,
+        customerId: {
+          _id: loggedInUser._id,
+          name: loggedInUser.name,
+          companyName: loggedInUser.companyName,
+          mobileNumber: loggedInUser.mobileNumber,
+          address: loggedInUser.address,
+          gstNumber: loggedInUser.gstNumber,
+        },
+      };
+
+      setHistoryInvoices((currentInvoices) => [savedInvoice, ...currentInvoices]);
+      setSelectedHistoryInvoice(savedInvoice);
       setActiveView("history");
+      await resetInvoiceForm();
+      fetchInvoiceHistory(loggedInUser._id);
       alert("Invoice saved successfully");
     } catch (error) {
       alert(error.response?.data?.error || `Error saving invoice: ${error.message}`);
@@ -292,6 +397,10 @@ export default function Invoice() {
                 <span>{name}</span>
               </div>
               <div className="detail-item">
+                <label>Company Name:</label>
+                <span>{companyName || name}</span>
+              </div>
+              <div className="detail-item">
                 <label>Address:</label>
                 <span>{address}</span>
               </div>
@@ -321,6 +430,10 @@ export default function Invoice() {
                 <div className="detail-item">
                   <label>Name:</label>
                   <span>{name}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Company Name:</label>
+                  <span>{companyName || name}</span>
                 </div>
                 <div className="detail-item">
                   <label>Address:</label>
@@ -503,7 +616,7 @@ export default function Invoice() {
                     <th>Date</th>
                     <th>Items</th>
                     <th>Total</th>
-                    <th>Action</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
 
@@ -515,15 +628,24 @@ export default function Invoice() {
                       <td>{invoice.lineItems.length}</td>
                       <td>Rs. {Number(invoice.totalPrice).toFixed(2)}</td>
                       <td>
-                        <button
-                          type="button"
-                          className={`edit-btn ${
-                            selectedHistoryInvoice?._id === invoice._id ? "history-active" : ""
-                          }`}
-                          onClick={() => setSelectedHistoryInvoice(invoice)}
-                        >
-                          View
-                        </button>
+                        <div className="history-actions">
+                          <button
+                            type="button"
+                            className={`edit-btn ${
+                              selectedHistoryInvoice?._id === invoice._id ? "history-active" : ""
+                            }`}
+                            onClick={() => setSelectedHistoryInvoice(invoice)}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            className="download-btn history-download-btn"
+                            onClick={() => downloadInvoicePdf(invoice)}
+                          >
+                            Download
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -546,6 +668,12 @@ export default function Invoice() {
                       <div className="detail-item">
                         <label>Customer Name:</label>
                         <span>{selectedHistoryInvoice.customerId?.name || name}</span>
+                      </div>
+                      <div className="detail-item">
+                        <label>Company Name:</label>
+                        <span>
+                          {selectedHistoryInvoice.customerId?.companyName || companyName || name}
+                        </span>
                       </div>
                       <div className="detail-item">
                         <label>Mobile Number:</label>
@@ -594,6 +722,16 @@ export default function Invoice() {
                   <div className="amount-words">
                     <label>Amount in words</label>
                     <input value={numberToWords(Number(selectedHistoryInvoice.totalPrice))} disabled />
+                  </div>
+
+                  <div className="btn-row history-detail-actions">
+                    <button
+                      type="button"
+                      className="download-btn"
+                      onClick={() => downloadInvoicePdf(selectedHistoryInvoice)}
+                    >
+                      Download This Invoice
+                    </button>
                   </div>
                 </div>
               ) : null}
