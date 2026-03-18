@@ -444,6 +444,104 @@ button:focus {
   margin-bottom: 16px;
 }
 
+.receipt-import-panel {
+  background: linear-gradient(135deg, var(--bg) 0%, rgba(44,122,123,0.03) 100%);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent-strong);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 20px 0;
+}
+
+.receipt-import-panel h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.receipt-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.receipt-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin: 0;
+}
+
+.receipt-upload-input {
+  display: none;
+}
+
+.receipt-file-copy {
+  color: var(--muted);
+}
+
+.receipt-status {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(44,122,123,0.16);
+  background: rgba(44,122,123,0.05);
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.receipt-status-loading {
+  border-color: rgba(44,122,123,0.22);
+  background: rgba(44,122,123,0.08);
+}
+
+.receipt-preview {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  max-width: 420px;
+}
+
+.receipt-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.receipt-text-panel {
+  margin-top: 16px;
+}
+
+.receipt-text-panel label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.receipt-text-output {
+  width: 100%;
+  min-height: 140px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: #fff;
+  color: #222;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.receipt-text-output:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(44,122,123,0.1);
+  outline: none;
+}
+
 .invoice-preview {
   padding: 20px;
   background-color: #fff;
@@ -795,6 +893,12 @@ button:focus {
   .toolbar-actions button,
   .history-actions button {
     width: 100%;
+  }
+
+  .receipt-upload-btn,
+  .receipt-preview {
+    width: 100%;
+    max-width: 100%;
   }
 
   .input-inline-action {

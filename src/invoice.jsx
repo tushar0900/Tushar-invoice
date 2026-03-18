@@ -4,6 +4,7 @@ import axios from "axios";
 import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
 import { clearAuthUser, getAuthUser, setAuthUser } from "./authStorage";
+import { extractReceiptDraftFromText } from "./receiptParser";
 import "./App.css";
 
 function createLineItem() {
@@ -14,9 +15,35 @@ function createInitialLineItems() {
   return [createLineItem()];
 }
 
+function hasInvoiceDraftContent(companyName, items) {
+  if (companyName.trim()) {
+    return true;
+  }
+
+  return items.some(
+    (item) => item.product.trim() || Number(item.rate) > 0 || Number(item.quantity) > 0
+  );
+}
+
+function formatOcrStatus(status, progress) {
+  const label = status
+    ? status
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
+    : "Scanning Receipt";
+
+  if (typeof progress !== "number" || Number.isNaN(progress)) {
+    return label;
+  }
+
+  return `${label} ${Math.round(progress * 100)}%`;
+}
+
 export default function Invoice() {
   const navigate = useNavigate();
   const invoiceRef = useRef(null);
+  const receiptPreviewUrlRef = useRef(null);
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [mobile, setMobile] = useState("");
@@ -31,6 +58,11 @@ export default function Invoice() {
   const [selectedHistoryInvoice, setSelectedHistoryInvoice] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [receiptImagePreview, setReceiptImagePreview] = useState("");
+  const [receiptFileName, setReceiptFileName] = useState("");
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrStatusMessage, setOcrStatusMessage] = useState("");
+  const [ocrExtractedText, setOcrExtractedText] = useState("");
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
@@ -38,6 +70,15 @@ export default function Invoice() {
 
   useEffect(() => {
     generateInvoiceNumber();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (receiptPreviewUrlRef.current) {
+        URL.revokeObjectURL(receiptPreviewUrlRef.current);
+        receiptPreviewUrlRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -102,6 +143,31 @@ export default function Invoice() {
     setName(user.name || "");
     setAddress(user.address || "");
     setGstNo(user.gstNumber || "");
+  };
+
+  const replaceReceiptPreview = (file) => {
+    if (receiptPreviewUrlRef.current) {
+      URL.revokeObjectURL(receiptPreviewUrlRef.current);
+      receiptPreviewUrlRef.current = null;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(file);
+    receiptPreviewUrlRef.current = nextPreviewUrl;
+    setReceiptImagePreview(nextPreviewUrl);
+    setReceiptFileName(file.name);
+  };
+
+  const clearReceiptImport = () => {
+    if (receiptPreviewUrlRef.current) {
+      URL.revokeObjectURL(receiptPreviewUrlRef.current);
+      receiptPreviewUrlRef.current = null;
+    }
+
+    setReceiptImagePreview("");
+    setReceiptFileName("");
+    setOcrStatusMessage("");
+    setOcrExtractedText("");
+    setOcrLoading(false);
   };
 
   const generateInvoiceNumber = async () => {
@@ -179,6 +245,7 @@ export default function Invoice() {
     setCompanyName("");
     setLineItems(createInitialLineItems());
     setGstRate(5);
+    clearReceiptImport();
     await generateInvoiceNumber();
   };
 
@@ -268,6 +335,105 @@ export default function Invoice() {
     };
 
     html2pdf().set(options).from(wrapper).save();
+  };
+
+  const handleReceiptImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file.");
+      return;
+    }
+
+    if (
+      hasInvoiceDraftContent(companyName, lineItems) &&
+      !window.confirm("Importing a receipt will replace the current invoice rows. Continue?")
+    ) {
+      return;
+    }
+
+    const previousDraft = {
+      companyName,
+      gstRate,
+      lineItems: lineItems.map((item) => ({ ...item })),
+    };
+
+    replaceReceiptPreview(file);
+    setOcrLoading(true);
+    setOcrStatusMessage("Preparing receipt scan...");
+    setOcrExtractedText("");
+
+    try {
+      const { default: Tesseract } = await import("tesseract.js");
+      const result = await Tesseract.recognize(file, "eng", {
+        logger: (message) => {
+          setOcrStatusMessage(formatOcrStatus(message.status, message.progress));
+        },
+      });
+
+      const extractedText = result.data?.text?.trim() || "";
+      setOcrExtractedText(extractedText);
+
+      if (!extractedText) {
+        setOcrStatusMessage(
+          "No readable text was detected. Try a clearer image with better lighting."
+        );
+        setCompanyName(previousDraft.companyName);
+        setGstRate(previousDraft.gstRate);
+        setLineItems(previousDraft.lineItems);
+        return;
+      }
+
+      const draft = extractReceiptDraftFromText(extractedText);
+      const nextLineItems = draft.lineItems.length
+        ? draft.lineItems
+        : previousDraft.lineItems.length
+          ? previousDraft.lineItems
+          : createInitialLineItems();
+
+      setLineItems(nextLineItems);
+
+      if (draft.companyName) {
+        setCompanyName(draft.companyName);
+      } else {
+        setCompanyName(previousDraft.companyName);
+      }
+
+      setGstRate(draft.gstRate || 5);
+
+      if (!draft.lineItems.length) {
+        setOcrStatusMessage(
+          "Text was detected, but line items could not be mapped cleanly. Review the extracted text and enter rows manually."
+        );
+        return;
+      }
+
+      const importSummary = [
+        `${draft.lineItems.length} item${draft.lineItems.length === 1 ? "" : "s"}`,
+        `GST ${draft.gstRate || 5}%`,
+      ];
+
+      if (draft.companyName) {
+        importSummary.unshift(`company "${draft.companyName}"`);
+      }
+
+      setOcrStatusMessage(`Imported ${importSummary.join(", ")}. Review before saving.`);
+    } catch (error) {
+      console.error("Receipt import failed:", error);
+      setCompanyName(previousDraft.companyName);
+      setGstRate(previousDraft.gstRate);
+      setLineItems(previousDraft.lineItems);
+      setOcrStatusMessage(
+        "Receipt scanning failed. Please try a sharper image or enter the details manually."
+      );
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   const handleSave = async (e) => {
@@ -383,6 +549,69 @@ export default function Invoice() {
 
       {activeView === "create" ? (
         <>
+          <div className="receipt-import-panel">
+            <h4>Receipt or Image to Invoice</h4>
+            <small>
+              Upload a clear receipt image to prefill company name, GST slab, and line items.
+              Review the imported values before saving.
+            </small>
+
+            <div className="receipt-import-actions">
+              <label className="secondary-btn receipt-upload-btn">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="receipt-upload-input"
+                  onChange={handleReceiptImport}
+                  disabled={ocrLoading}
+                />
+                {ocrLoading ? "Scanning Receipt..." : "Upload Receipt Image"}
+              </label>
+
+              {receiptImagePreview ? (
+                <button
+                  type="button"
+                  className="clear-btn"
+                  onClick={clearReceiptImport}
+                  disabled={ocrLoading}
+                >
+                  Clear Scan
+                </button>
+              ) : null}
+
+              <small className="receipt-file-copy">
+                {receiptFileName
+                  ? `Selected file: ${receiptFileName}`
+                  : "Use a flat, well-lit image for better OCR results."}
+              </small>
+            </div>
+
+            {ocrStatusMessage ? (
+              <div className={`receipt-status ${ocrLoading ? "receipt-status-loading" : ""}`}>
+                {ocrStatusMessage}
+              </div>
+            ) : null}
+
+            {receiptImagePreview ? (
+              <div className="receipt-preview">
+                <img src={receiptImagePreview} alt="Uploaded receipt preview" />
+              </div>
+            ) : null}
+
+            {ocrExtractedText ? (
+              <div className="receipt-text-panel">
+                <label>Extracted Text</label>
+                <textarea
+                  className="receipt-text-output"
+                  value={ocrExtractedText}
+                  readOnly
+                  rows={6}
+                />
+              </div>
+            ) : null}
+          </div>
+
           <div className="customer-selection">
             <h4>Logged In Customer</h4>
 
