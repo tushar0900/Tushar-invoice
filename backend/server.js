@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -11,12 +12,12 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === "production";
+const HOST = process.env.HOST || (isProduction ? "0.0.0.0" : "127.0.0.1");
 const MONGODB_URI =
-  process.env.MONGODB_URI ||
-  (!isProduction ? "mongodb://127.0.0.1:27017/invoiceDB" : "");
+  process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/invoiceDB";
 
 if (!MONGODB_URI) {
-  console.error("MONGODB_URI is required in production.");
+  console.error("MONGODB_URI is required to connect to MongoDB.");
   process.exit(1);
 }
 
@@ -32,8 +33,8 @@ const startServer = async () => {
     await mongoose.connect(MONGODB_URI);
     console.log("MongoDB connected successfully...");
 
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`Server running on http://${HOST}:${PORT}`);
     });
   } catch (err) {
     console.error("MongoDB connection error!!", err.message);

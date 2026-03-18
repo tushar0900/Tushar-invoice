@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { loadUsers, setAuthUser } from "./authStorage";
+import axios from "axios";
+import API_BASE_URL from "./api";
+import { setAuthUser } from "./authStorage";
 import "./App.css";
 
 export default function Login() {
@@ -18,7 +20,7 @@ export default function Login() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const name = formData.name.trim();
@@ -29,24 +31,33 @@ export default function Login() {
       return;
     }
 
-    const users = loadUsers();
-    const match = users.find(
-      (user) => user.name.toLowerCase() === name.toLowerCase() && user.password === password
-    );
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/customers/login`, {
+        name,
+        password,
+      });
 
-    if (!match) {
-      alert("Invalid name or password");
-      return;
+      setAuthUser({
+        name: response.data.name,
+        mobileNumber: response.data.mobileNumber,
+        address: response.data.address,
+        gstNumber: response.data.gstNumber,
+      });
+
+      navigate("/invoice");
+    } catch (error) {
+      if (error.response?.status === 400 || error.response?.status === 401) {
+        alert(error.response?.data?.error || "Invalid name or password");
+        return;
+      }
+
+      if (!error.response) {
+        alert("Unable to reach server. Please try again.");
+        return;
+      }
+
+      alert("Error: " + (error.response?.data?.error || error.message));
     }
-
-    setAuthUser({
-      name: match.name,
-      mobileNumber: match.mobileNumber,
-      address: match.address,
-      gstNumber: match.gstNumber,
-    });
-
-    navigate("/invoice");
   };
 
   return (

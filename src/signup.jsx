@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import API_BASE_URL from "./api";
-import { loadUsers, saveUsers } from "./authStorage";
 import "./App.css";
 
 export default function Signup() {
@@ -38,41 +37,19 @@ export default function Signup() {
       return;
     }
 
-    const users = loadUsers();
-    const normalizedName = cleaned.name.toLowerCase();
-
-    if (users.some((user) => user.name.toLowerCase() === normalizedName)) {
-      alert("Name already registered. Please login.");
-      return;
-    }
-
-    if (users.some((user) => user.mobileNumber === cleaned.mobileNumber)) {
-      alert("Mobile number already registered. Please login.");
-      return;
-    }
-
     try {
       await axios.post(`${API_BASE_URL}/api/customers`, {
         mobileNumber: cleaned.mobileNumber,
         name: cleaned.name,
+        password: cleaned.password,
         address: cleaned.address,
         gstNumber: cleaned.gstNumber,
       });
-
-      const newUser = {
-        name: cleaned.name,
-        password: cleaned.password,
-        mobileNumber: cleaned.mobileNumber,
-        address: cleaned.address,
-        gstNumber: cleaned.gstNumber,
-      };
-
-      saveUsers([...users, newUser]);
       alert("Registration successful. Please login.");
       navigate("/login", { state: { registeredName: cleaned.name } });
     } catch (error) {
-      if (error.response?.status === 400) {
-        alert(error.response?.data?.error || "Error: Mobile number already exists");
+      if (error.response?.status === 400 || error.response?.status === 409) {
+        alert(error.response?.data?.error || "Unable to complete registration.");
       } else if (!error.response) {
         alert("Unable to reach server. Please try again.");
       } else {
