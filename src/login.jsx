@@ -38,6 +38,7 @@ export default function Login() {
       });
 
       setAuthUser({
+        _id: response.data._id,
         name: response.data.name,
         mobileNumber: response.data.mobileNumber,
         address: response.data.address,

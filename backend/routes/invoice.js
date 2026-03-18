@@ -3,6 +3,7 @@ import Invoice from "../models/invoice.js";
 import Customer from "../models/customer.js";
 
 const router = express.Router();
+const invoiceCustomerSelection = "name mobileNumber address gstNumber";
 
 // Generate next invoice number
 router.get("/generate/number", async (req, res) => {
@@ -54,10 +55,23 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Get invoices for a specific customer
+router.get("/customer/:customerId", async (req, res) => {
+  try {
+    const invoices = await Invoice.find({ customerId: req.params.customerId })
+      .populate("customerId", invoiceCustomerSelection)
+      .sort({ createdAt: -1 });
+
+    res.json(invoices);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Get All Invoices with Customer details
 router.get("/", async (req, res) => {
   try {
-    const invoices = await Invoice.find().populate("customerId");
+    const invoices = await Invoice.find().populate("customerId", invoiceCustomerSelection);
     res.json(invoices);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -67,7 +81,10 @@ router.get("/", async (req, res) => {
 // Get Invoice by ID
 router.get("/:id", async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id).populate("customerId");
+    const invoice = await Invoice.findById(req.params.id).populate(
+      "customerId",
+      invoiceCustomerSelection
+    );
     if (!invoice) {
       return res.status(404).json({ error: "Invoice not found" });
     }

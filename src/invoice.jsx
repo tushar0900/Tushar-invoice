@@ -1,51 +1,114 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
-import { getAuthUser } from "./authStorage";
+import { clearAuthUser, getAuthUser, setAuthUser } from "./authStorage";
 import "./App.css";
+
+function createLineItem() {
+  return { product: "", rate: 0, quantity: 0, total: 0 };
+}
+
+function createInitialLineItems() {
+  return [createLineItem()];
+}
 
 export default function Invoice() {
   const navigate = useNavigate();
   const invoiceRef = useRef(null);
+  const [loggedInUser, setLoggedInUser] = useState(null);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [mobile, setMobile] = useState("");
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [gstNo, setGstNo] = useState("");
-
-  const [lineItems, setLineItems] = useState([
-    { product: "", rate: 0, quantity: 0, total: 0 },
-  ]);
+  const [lineItems, setLineItems] = useState(createInitialLineItems);
   const [gstRate, setGstRate] = useState(5);
+  const [activeView, setActiveView] = useState("create");
+  const [historyInvoices, setHistoryInvoices] = useState([]);
+  const [selectedHistoryInvoice, setSelectedHistoryInvoice] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
-  // Generate invoice number on component mount
+  const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+  const gstAmount = (subtotal * gstRate) / 100;
+  const grandTotal = subtotal + gstAmount;
+
   useEffect(() => {
     generateInvoiceNumber();
   }, []);
 
   useEffect(() => {
-    const storedUser = getAuthUser();
-    if (!storedUser) {
-      navigate("/login");
+    let isActive = true;
+
+    const hydrateLoggedInUser = async () => {
+      const storedUser = getAuthUser();
+      if (!storedUser) {
+        navigate("/login");
+        return;
+      }
+
+      if (storedUser._id) {
+        if (isActive) {
+          applyLoggedInCustomer(storedUser);
+        }
+        return;
+      }
+
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/customers/mobile/${storedUser.mobileNumber}`
+        );
+        const hydratedUser = {
+          _id: response.data._id,
+          name: response.data.name,
+          mobileNumber: response.data.mobileNumber,
+          address: response.data.address,
+          gstNumber: response.data.gstNumber,
+        };
+
+        setAuthUser(hydratedUser);
+        if (isActive) {
+          applyLoggedInCustomer(hydratedUser);
+        }
+      } catch (error) {
+        clearAuthUser();
+        if (isActive) {
+          navigate("/login");
+        }
+      }
+    };
+
+    hydrateLoggedInUser();
+
+    return () => {
+      isActive = false;
+    };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!loggedInUser?._id) {
       return;
     }
 
-    setMobile(storedUser.mobileNumber || "");
-    setName(storedUser.name || "");
-    setAddress(storedUser.address || "");
-    setGstNo(storedUser.gstNumber || "");
-  }, [navigate]);
+    fetchInvoiceHistory(loggedInUser._id);
+  }, [loggedInUser?._id]);
 
-  // Generate next invoice number
+  const applyLoggedInCustomer = (user) => {
+    setLoggedInUser(user);
+    setMobile(user.mobileNumber || "");
+    setName(user.name || "");
+    setAddress(user.address || "");
+    setGstNo(user.gstNumber || "");
+  };
+
   const generateInvoiceNumber = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/invoices/generate/number`);
-      setInvoiceNo(res.data.invoiceNumber);
+      const response = await axios.get(`${API_BASE_URL}/api/invoices/generate/number`);
+      setInvoiceNo(response.data.invoiceNumber);
     } catch (error) {
       console.error("Error generating invoice number (backend failed):", error);
-      // Fallback: generate a timestamp-based invoice number so UI still shows a value
       const now = new Date();
       const y = now.getFullYear();
       const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -53,101 +116,80 @@ export default function Invoice() {
       const hh = String(now.getHours()).padStart(2, "0");
       const mm = String(now.getMinutes()).padStart(2, "0");
       const ss = String(now.getSeconds()).padStart(2, "0");
-      const fallback = `INV-${y}${m}${d}${hh}${mm}${ss}`;
-      setInvoiceNo(fallback);
+      setInvoiceNo(`INV-${y}${m}${d}${hh}${mm}${ss}`);
     }
   };
 
-  // Calculate totals
-  const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
-  const gstAmount = (subtotal * gstRate) / 100;
-  const grandTotal = subtotal + gstAmount;
+  const fetchInvoiceHistory = async (customerId) => {
+    setHistoryLoading(true);
+    setHistoryError("");
 
-  // Fetch customer by mobile number
-  const fetchCustomer = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/api/customers/mobile/${mobile}`);
-      setName(res.data.name);
-      setAddress(res.data.address);
-      setGstNo(res.data.gstNumber);
+      const response = await axios.get(`${API_BASE_URL}/api/invoices/customer/${customerId}`);
+      setHistoryInvoices(response.data);
+      setSelectedHistoryInvoice((currentSelection) => {
+        if (!response.data.length) {
+          return null;
+        }
+
+        if (!currentSelection) {
+          return response.data[0];
+        }
+
+        return (
+          response.data.find((invoice) => invoice._id === currentSelection._id) ||
+          response.data[0]
+        );
+      });
     } catch (error) {
-      setName("");
-      setAddress("");
-      setGstNo("");
-
-      if (error.response?.status === 404) {
-        alert("Customer not found");
-        return;
-      }
-
-      if (!error.response) {
-        alert("Unable to reach server. Please try again.");
-        return;
-      }
-
-      alert(error.response?.data?.error || "Error fetching customer");
+      setHistoryError(
+        error.response?.data?.error || "Unable to load invoice history. Please try again."
+      );
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
-  // Clear customer details
-  const clearCustomer = () => {
-    setMobile("");
-    setName("");
-    setAddress("");
-    setGstNo("");
-  };
-
-  const restoreLoggedInCustomer = () => {
-    const storedUser = getAuthUser();
-    if (!storedUser) {
-      return;
-    }
-
-    setMobile(storedUser.mobileNumber || "");
-    setName(storedUser.name || "");
-    setAddress(storedUser.address || "");
-    setGstNo(storedUser.gstNumber || "");
-  };
-
-  // Handle line item change
   const handleLineItemChange = (index, field, value) => {
     const updatedItems = [...lineItems];
     updatedItems[index][field] = field === "product" ? value : Number(value);
-    
-    // Calculate total for this row
+
     if (field === "rate" || field === "quantity") {
       updatedItems[index].total = updatedItems[index].rate * updatedItems[index].quantity;
     }
-    
+
     setLineItems(updatedItems);
   };
 
-  // Add new row
   const addRow = () => {
-    setLineItems([...lineItems, { product: "", rate: 0, quantity: 0, total: 0 }]);
+    setLineItems([...lineItems, createLineItem()]);
   };
 
-  // Remove row
   const removeRow = (index) => {
-    if (lineItems.length > 1) {
-      setLineItems(lineItems.filter((_, i) => i !== index));
-    } else {
+    if (lineItems.length === 1) {
       alert("Invoice must have at least one line item");
+      return;
     }
+
+    setLineItems(lineItems.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  // Save invoice
+  const resetInvoiceForm = async () => {
+    setLineItems(createInitialLineItems());
+    setGstRate(5);
+    await generateInvoiceNumber();
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
 
-    if (!invoiceNo || !mobile || lineItems.length === 0) {
+    if (!invoiceNo || !loggedInUser?.mobileNumber || lineItems.length === 0) {
       alert("Please fill all required fields");
       return;
     }
 
-    // Validate line items
     const validItems = lineItems.every(
-      item => item.product && item.rate > 0 && item.quantity > 0
+      (item) => item.product && item.rate > 0 && item.quantity > 0
     );
 
     if (!validItems) {
@@ -156,32 +198,25 @@ export default function Invoice() {
     }
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/invoices`,
-        {
-          invoiceNumber: invoiceNo,
-          lineItems: lineItems,
-          gstSlab: gstRate,
-          totalPrice: grandTotal,
-          customerMobileNumber: mobile,
-        }
-      );
+      await axios.post(`${API_BASE_URL}/api/invoices`, {
+        invoiceNumber: invoiceNo,
+        lineItems,
+        gstSlab: gstRate,
+        totalPrice: grandTotal,
+        customerMobileNumber: loggedInUser.mobileNumber,
+      });
 
+      await fetchInvoiceHistory(loggedInUser._id);
+      await resetInvoiceForm();
+      setActiveView("history");
       alert("Invoice saved successfully");
-
-      // Reset form
-      setInvoiceNo("");
-      restoreLoggedInCustomer();
-      setLineItems([{ product: "", rate: 0, quantity: 0, total: 0 }]);
-      setGstRate(5);
     } catch (error) {
-      alert("Error saving invoice: " + error.message);
+      alert(error.response?.data?.error || `Error saving invoice: ${error.message}`);
     }
   };
 
-  // Download invoice as PDF
   const handleDownloadPDF = () => {
-    if (!invoiceNo || !mobile || lineItems.length === 0) {
+    if (!invoiceNo || !loggedInUser?.mobileNumber || lineItems.length === 0) {
       alert("Please fill all required fields and save invoice first");
       return;
     }
@@ -198,36 +233,59 @@ export default function Invoice() {
     html2pdf().set(options).from(element).save();
   };
 
+  const handleLogout = () => {
+    clearAuthUser();
+    navigate("/login");
+  };
+
+  const selectedHistorySubtotal = selectedHistoryInvoice
+    ? selectedHistoryInvoice.lineItems.reduce((sum, item) => sum + item.total, 0)
+    : 0;
+  const selectedHistoryGst = selectedHistoryInvoice
+    ? (selectedHistorySubtotal * selectedHistoryInvoice.gstSlab) / 100
+    : 0;
+
   return (
     <div className="annexure">
-      <h2 className="center">Generate Invoice</h2>
-
-      {/* Content for PDF Export */}
-      <div ref={invoiceRef} style={{ padding: "20px", backgroundColor: "#fff" }}>
-        {/* Invoice Header */}
-        <div style={{ textAlign: "center", marginBottom: "30px" }}>
-          <h1 style={{ margin: "0 0 10px 0", fontSize: "28px", fontWeight: "bold" }}>
-            INVOICE
-          </h1>
-          <p style={{ margin: "0", fontSize: "14px", color: "#666" }}>
-            Invoice #: <strong>{invoiceNo}</strong>
-          </p>
+      <div className="page-toolbar">
+        <div>
+          <h2>{activeView === "history" ? "Invoice History" : "Generate Invoice"}</h2>
+          <small>
+            Signed in as <strong>{name || "Customer"}</strong>
+          </small>
         </div>
 
-        {/* Invoice Number */}
-        <div className="row single">
-          <label>Invoice Number:</label>
-          <input
-            value={invoiceNo}
-            disabled
-            style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
-          />
+        <div className="toolbar-actions">
+          <button
+            type="button"
+            className={`mode-btn ${activeView === "create" ? "active" : ""}`}
+            onClick={() => setActiveView("create")}
+          >
+            Create Invoice
+          </button>
+          <button
+            type="button"
+            className={`mode-btn ${activeView === "history" ? "active" : ""}`}
+            onClick={() => setActiveView("history")}
+          >
+            Invoice History
+          </button>
+          <button type="button" className="secondary-btn toolbar-btn" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
+      </div>
 
-        {/* Customer Details Display */}
-        {(name || address || gstNo) && (
-          <div className="customer-details-box">
-            <h4>Customer Information</h4>
+      {activeView === "create" ? (
+        <>
+          <div className="customer-selection">
+            <h4>Logged In Customer</h4>
+
+            <div className="row single">
+              <label>Customer Mobile Number</label>
+              <input value={mobile} disabled />
+            </div>
+
             <div className="details-grid">
               <div className="detail-item">
                 <label>Name:</label>
@@ -243,233 +301,329 @@ export default function Invoice() {
               </div>
             </div>
           </div>
-        )}
 
-        {/* Product Table */}
-        <table className="invoice-table">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Rate</th>
-              <th>Quantity</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {lineItems.map((item, index) => (
-              <tr key={index}>
-                <td>{item.product}</td>
-                <td>₹{item.rate.toFixed(2)}</td>
-                <td>{item.quantity}</td>
-                <td>₹{item.total.toFixed(2)}</td>
-              </tr>
-            ))}
-
-            {/* GST Row */}
-            <tr style={{ fontWeight: "bold" }}>
-              <td colSpan="2"></td>
-              <td>Subtotal:</td>
-              <td>₹{subtotal.toFixed(2)}</td>
-            </tr>
-            <tr style={{ fontWeight: "bold" }}>
-              <td colSpan="2"></td>
-              <td>GST ({gstRate}%):</td>
-              <td>₹{gstAmount.toFixed(2)}</td>
-            </tr>
-            <tr style={{ fontWeight: "bold", backgroundColor: "#f0f0f0" }}>
-              <td colSpan="2"></td>
-              <td>Grand Total:</td>
-              <td>₹{grandTotal.toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Amount in Words */}
-        <div className="amount-words">
-          <label>Amount in words:</label>
-          <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
-            {numberToWords(grandTotal)}
-          </p>
-        </div>
-      </div>
-
-      {/* Customer Selection Section */}
-      <div className="customer-selection">
-        <h4>Enter Customer Details</h4>
-        
-        <div className="row">
-          <label>Customer Mobile Number</label>
-          <input
-            value={mobile}
-            onChange={e => setMobile(e.target.value)}
-            placeholder="Enter customer mobile number"
-          />
-          <button
-            type="button"
-            className="fetch-btn"
-            onClick={fetchCustomer}
-            title="Fetch customer details"
-          >
-            Fetch
-          </button>
-          <button
-            type="button"
-            className="clear-btn"
-            onClick={clearCustomer}
-            title="Clear customer details"
-          >
-            Clear
-          </button>
-        </div>
-
-        <div className="add-customer-link">
-          <small>
-            Don't have a customer yet?{" "}
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => navigate("/signup")}
-            >
-              Add New Customer
-            </button>
-          </small>
-        </div>
-      </div>
-
-      {/* Customer Details Display */}
-      {(name || address || gstNo) && (
-        <div className="customer-details-box">
-          <h4>Customer Information</h4>
-          <div className="details-grid">
-            <div className="detail-item">
-              <label>Name:</label>
-              <span>{name}</span>
+          <div ref={invoiceRef} className="invoice-preview">
+            <div className="invoice-preview-header">
+              <h1>INVOICE</h1>
+              <p>
+                Invoice #: <strong>{invoiceNo}</strong>
+              </p>
             </div>
-            <div className="detail-item">
-              <label>Address:</label>
-              <span>{address}</span>
+
+            <div className="row single">
+              <label>Invoice Number:</label>
+              <input value={invoiceNo} disabled />
             </div>
-            <div className="detail-item">
-              <label>GST Number:</label>
-              <span>{gstNo}</span>
+
+            <div className="customer-details-box">
+              <h4>Customer Information</h4>
+              <div className="details-grid">
+                <div className="detail-item">
+                  <label>Name:</label>
+                  <span>{name}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Address:</label>
+                  <span>{address}</span>
+                </div>
+                <div className="detail-item">
+                  <label>GST Number:</label>
+                  <span>{gstNo}</span>
+                </div>
+              </div>
+            </div>
+
+            <table className="invoice-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Rate</th>
+                  <th>Quantity</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {lineItems.map((item, index) => (
+                  <tr key={`${item.product}-${index}`}>
+                    <td>{item.product}</td>
+                    <td>Rs. {item.rate.toFixed(2)}</td>
+                    <td>{item.quantity}</td>
+                    <td>Rs. {item.total.toFixed(2)}</td>
+                  </tr>
+                ))}
+                <tr className="totals-row">
+                  <td colSpan="2"></td>
+                  <td>Subtotal:</td>
+                  <td>Rs. {subtotal.toFixed(2)}</td>
+                </tr>
+                <tr className="totals-row">
+                  <td colSpan="2"></td>
+                  <td>GST ({gstRate}%):</td>
+                  <td>Rs. {gstAmount.toFixed(2)}</td>
+                </tr>
+                <tr className="totals-row total-highlight">
+                  <td colSpan="2"></td>
+                  <td>Grand Total:</td>
+                  <td>Rs. {grandTotal.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="amount-words">
+              <label>Amount in words:</label>
+              <p className="amount-words-copy">{numberToWords(grandTotal)}</p>
             </div>
           </div>
+
+          <table className="invoice-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Rate</th>
+                <th>Quantity</th>
+                <th>Total</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {lineItems.map((item, index) => (
+                <tr key={index}>
+                  <td>
+                    <input
+                      value={item.product}
+                      onChange={(e) => handleLineItemChange(index, "product", e.target.value)}
+                      placeholder="Product name"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.rate}
+                      onChange={(e) => handleLineItemChange(index, "rate", e.target.value)}
+                      placeholder="Rate"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => handleLineItemChange(index, "quantity", e.target.value)}
+                      placeholder="Qty"
+                    />
+                  </td>
+                  <td>
+                    <input value={item.total} disabled />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="remove-btn"
+                      onClick={() => removeRow(index)}
+                      title="Remove row"
+                    >
+                      X
+                    </button>
+                  </td>
+                </tr>
+              ))}
+
+              <tr>
+                <td colSpan="5">
+                  <button type="button" className="add-row-btn" onClick={addRow}>
+                    + Add Row
+                  </button>
+                </td>
+              </tr>
+
+              <tr>
+                <td colSpan="2">
+                  <strong>GST Dropdown</strong>
+                </td>
+                <td>
+                  <select value={gstRate} onChange={(e) => setGstRate(Number(e.target.value))}>
+                    <option value="5">GST 5%</option>
+                    <option value="12">GST 12%</option>
+                    <option value="18">GST 18%</option>
+                    <option value="28">GST 28%</option>
+                  </select>
+                </td>
+                <td colSpan="2">
+                  <strong>Total</strong>
+                  <input value={grandTotal} disabled style={{ marginTop: "5px" }} />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="amount-words">
+            <label>Amount in words</label>
+            <input value={numberToWords(grandTotal)} disabled />
+          </div>
+
+          <div className="btn-row">
+            <button className="save-btn" onClick={handleSave}>
+              SAVE
+            </button>
+            <button className="download-btn" onClick={handleDownloadPDF}>
+              Download as PDF
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="history-panel">
+          <div className="history-panel-header">
+            <div>
+              <h4>Previous Invoices</h4>
+              <small>Your saved invoices are shown newest first.</small>
+            </div>
+            <button
+              type="button"
+              className="secondary-btn toolbar-btn"
+              onClick={() => fetchInvoiceHistory(loggedInUser?._id)}
+              disabled={!loggedInUser?._id || historyLoading}
+            >
+              {historyLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {historyError ? <div className="history-message">{historyError}</div> : null}
+
+          {historyLoading ? (
+            <div className="history-empty-state">Loading invoice history...</div>
+          ) : historyInvoices.length === 0 ? (
+            <div className="history-empty-state">No invoices saved yet for this account.</div>
+          ) : (
+            <>
+              <table className="invoice-table history-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Date</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {historyInvoices.map((invoice) => (
+                    <tr key={invoice._id}>
+                      <td>{invoice.invoiceNumber}</td>
+                      <td>{formatDateTime(invoice.createdAt)}</td>
+                      <td>{invoice.lineItems.length}</td>
+                      <td>Rs. {Number(invoice.totalPrice).toFixed(2)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className={`edit-btn ${
+                            selectedHistoryInvoice?._id === invoice._id ? "history-active" : ""
+                          }`}
+                          onClick={() => setSelectedHistoryInvoice(invoice)}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {selectedHistoryInvoice ? (
+                <div className="history-detail">
+                  <div className="customer-details-box">
+                    <h4>Invoice Details</h4>
+                    <div className="details-grid">
+                      <div className="detail-item">
+                        <label>Invoice Number:</label>
+                        <span>{selectedHistoryInvoice.invoiceNumber}</span>
+                      </div>
+                      <div className="detail-item">
+                        <label>Created On:</label>
+                        <span>{formatDateTime(selectedHistoryInvoice.createdAt)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <label>Customer Name:</label>
+                        <span>{selectedHistoryInvoice.customerId?.name || name}</span>
+                      </div>
+                      <div className="detail-item">
+                        <label>Mobile Number:</label>
+                        <span>{selectedHistoryInvoice.customerId?.mobileNumber || mobile}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <table className="invoice-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Rate</th>
+                        <th>Quantity</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {selectedHistoryInvoice.lineItems.map((item, index) => (
+                        <tr key={`${item.product}-${index}`}>
+                          <td>{item.product}</td>
+                          <td>Rs. {Number(item.rate).toFixed(2)}</td>
+                          <td>{item.quantity}</td>
+                          <td>Rs. {Number(item.total).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      <tr className="totals-row">
+                        <td colSpan="2"></td>
+                        <td>Subtotal:</td>
+                        <td>Rs. {selectedHistorySubtotal.toFixed(2)}</td>
+                      </tr>
+                      <tr className="totals-row">
+                        <td colSpan="2"></td>
+                        <td>GST ({selectedHistoryInvoice.gstSlab}%):</td>
+                        <td>Rs. {selectedHistoryGst.toFixed(2)}</td>
+                      </tr>
+                      <tr className="totals-row total-highlight">
+                        <td colSpan="2"></td>
+                        <td>Grand Total:</td>
+                        <td>Rs. {Number(selectedHistoryInvoice.totalPrice).toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div className="amount-words">
+                    <label>Amount in words</label>
+                    <input value={numberToWords(Number(selectedHistoryInvoice.totalPrice))} disabled />
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       )}
-
-      {/* Product Table */}
-      <table className="invoice-table">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Rate</th>
-            <th>Quantity</th>
-            <th>Total</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {lineItems.map((item, index) => (
-            <tr key={index}>
-              <td>
-                <input
-                  value={item.product}
-                  onChange={e => handleLineItemChange(index, "product", e.target.value)}
-                  placeholder="Product name"
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  value={item.rate}
-                  onChange={e => handleLineItemChange(index, "rate", e.target.value)}
-                  placeholder="Rate"
-                />
-              </td>
-              <td>
-                <input
-                  type="number"
-                  value={item.quantity}
-                  onChange={e => handleLineItemChange(index, "quantity", e.target.value)}
-                  placeholder="Qty"
-                />
-              </td>
-              <td>
-                <input value={item.total} disabled />
-              </td>
-              <td>
-                <button
-                  type="button"
-                  className="remove-btn"
-                  onClick={() => removeRow(index)}
-                  title="Remove row"
-                >
-                  ✕
-                </button>
-              </td>
-            </tr>
-          ))}
-
-          {/* Add Row Button */}
-          <tr>
-            <td colSpan="5">
-              <button
-                type="button"
-                className="add-row-btn"
-                onClick={addRow}
-              >
-                + Add Row
-              </button>
-            </td>
-          </tr>
-
-          {/* GST Row */}
-          <tr>
-            <td colSpan="2">
-              <strong>GST Dropdown</strong>
-            </td>
-            <td>
-              <select
-                value={gstRate}
-                onChange={e => setGstRate(Number(e.target.value))}
-              >
-                <option value="5">GST 5%</option>
-                <option value="12">GST 12%</option>
-                <option value="18">GST 18%</option>
-                <option value="28">GST 28%</option>
-              </select>
-            </td>
-            <td colSpan="2">
-              <strong>Total</strong>
-              <input value={grandTotal} disabled style={{ marginTop: "5px" }} />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Amount in Words */}
-      <div className="amount-words">
-        <label>Amount in words</label>
-        <input value={numberToWords(grandTotal)} disabled />
-      </div>
-
-      {/* Save and Download Buttons */}
-      <div className="btn-row">
-        <button className="save-btn" onClick={handleSave}>SAVE</button>
-        <button className="download-btn" onClick={handleDownloadPDF}>
-          📥 Download as PDF
-        </button>
-      </div>
     </div>
   );
 }
 
-/* Number to words conversion */
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function numberToWords(num) {
   if (num === 0 || num === "") return "";
-  
+
+  const wholeNumber = Math.round(Number(num));
+
   const ones = [
     "",
     "One",
@@ -512,26 +666,29 @@ function numberToWords(num) {
     if (n === 0) return "";
     if (n < 10) return ones[n];
     if (n < 20) return teens[n - 10];
-    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
-    return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + convert(n % 100) : "");
+    if (n < 100) {
+      return tens[Math.floor(n / 10)] + (n % 10 ? ` ${ones[n % 10]}` : "");
+    }
+    return (
+      ones[Math.floor(n / 100)] +
+      " Hundred" +
+      (n % 100 ? ` ${convert(n % 100)}` : "")
+    );
   }
 
   const parts = [];
+  let remaining = wholeNumber;
   let scaleIndex = 0;
 
-  while (num > 0) {
-    const part = num % 1000;
+  while (remaining > 0) {
+    const part = remaining % 1000;
     if (part !== 0) {
       const words = convert(part);
-      if (scales[scaleIndex]) {
-        parts.unshift(words + " " + scales[scaleIndex]);
-      } else {
-        parts.unshift(words);
-      }
+      parts.unshift(scales[scaleIndex] ? `${words} ${scales[scaleIndex]}` : words);
     }
-    num = Math.floor(num / 1000);
+    remaining = Math.floor(remaining / 1000);
     scaleIndex++;
   }
 
-  return parts.join(" ").trim() + " Only";
+  return `${parts.join(" ").trim()} Only`;
 }
