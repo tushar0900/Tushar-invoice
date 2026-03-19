@@ -1,23 +1,31 @@
 import mongoose from "mongoose";
 
-const lineItemSchema = new mongoose.Schema({
-  product: {
-    type: String,
-    required: true,
+const lineItemSchema = new mongoose.Schema(
+  {
+    product: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 200,
+    },
+    rate: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+    total: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
   },
-  rate: {
-    type: Number,
-    required: true,
-  },
-  quantity: {
-    type: Number,
-    required: true,
-  },
-  total: {
-    type: Number,
-    required: true,
-  },
-});
+  { _id: false }
+);
 
 const invoice = new mongoose.Schema(
   {
@@ -25,6 +33,7 @@ const invoice = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      trim: true,
     },
     companyName: {
       type: String,
@@ -35,10 +44,12 @@ const invoice = new mongoose.Schema(
     gstSlab: {
       type: Number,
       required: true,
+      enum: [5, 12, 18, 28],
     },
     totalPrice: {
       type: Number,
       required: true,
+      min: 0.01,
     },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,

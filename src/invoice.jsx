@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
-import { clearAuthUser, getAuthUser, setAuthUser } from "./authStorage";
 import { extractReceiptDraftFromText } from "./receiptParser";
 import "./App.css";
 
@@ -149,8 +148,30 @@ export default function Invoice() {
   const grandTotal = subtotal + gstAmount;
 
   useEffect(() => {
-    generateInvoiceNumber();
-  }, []);
+    const loadInvoiceNumber = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/invoices/generate/number`);
+        setInvoiceNo(response.data.invoiceNumber);
+      } catch (error) {
+        if (error.response?.status === 401) {
+          navigate("/login");
+          return;
+        }
+
+        console.error("Error generating invoice number (backend failed):", error);
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        const hh = String(now.getHours()).padStart(2, "0");
+        const mm = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        setInvoiceNo(`INV-${y}${m}${d}${hh}${mm}${ss}`);
+      }
+    };
+
+    loadInvoiceNumber();
+  }, [navigate]);
 
   useEffect(() => {
     return () => {
@@ -165,37 +186,12 @@ export default function Invoice() {
     let isActive = true;
 
     const hydrateLoggedInUser = async () => {
-      const storedUser = getAuthUser();
-      if (!storedUser) {
-        navigate("/login");
-        return;
-      }
-
-      if (storedUser._id) {
-        if (isActive) {
-          applyLoggedInCustomer(storedUser);
-        }
-        return;
-      }
-
       try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/customers/mobile/${storedUser.mobileNumber}`
-        );
-        const hydratedUser = {
-          _id: response.data._id,
-          name: response.data.name,
-          mobileNumber: response.data.mobileNumber,
-          address: response.data.address,
-          gstNumber: response.data.gstNumber,
-        };
-
-        setAuthUser(hydratedUser);
+        const response = await axios.get(`${API_BASE_URL}/api/customers/me`);
         if (isActive) {
-          applyLoggedInCustomer(hydratedUser);
+          applyLoggedInCustomer(response.data);
         }
       } catch {
-        clearAuthUser();
         if (isActive) {
           navigate("/login");
         }
@@ -214,8 +210,43 @@ export default function Invoice() {
       return;
     }
 
-    fetchInvoiceHistory(loggedInUser._id);
-  }, [loggedInUser?._id]);
+    const loadInvoiceHistory = async () => {
+      setHistoryLoading(true);
+      setHistoryError("");
+
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/invoices/me`);
+        setHistoryInvoices(response.data);
+        setSelectedHistoryInvoice((currentSelection) => {
+          if (!response.data.length) {
+            return null;
+          }
+
+          if (!currentSelection) {
+            return response.data[0];
+          }
+
+          return (
+            response.data.find((invoice) => invoice._id === currentSelection._id) ||
+            response.data[0]
+          );
+        });
+      } catch (error) {
+        if (error.response?.status === 401) {
+          navigate("/login");
+          return;
+        }
+
+        setHistoryError(
+          error.response?.data?.error || "Unable to load invoice history. Please try again."
+        );
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+
+    loadInvoiceHistory();
+  }, [loggedInUser?._id, navigate]);
 
   const applyLoggedInCustomer = (user) => {
     setLoggedInUser(user);
@@ -255,6 +286,11 @@ export default function Invoice() {
       const response = await axios.get(`${API_BASE_URL}/api/invoices/generate/number`);
       setInvoiceNo(response.data.invoiceNumber);
     } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/login");
+        return;
+      }
+
       console.error("Error generating invoice number (backend failed):", error);
       const now = new Date();
       const y = now.getFullYear();
@@ -267,12 +303,12 @@ export default function Invoice() {
     }
   };
 
-  const fetchInvoiceHistory = async (customerId) => {
+  const fetchInvoiceHistory = async () => {
     setHistoryLoading(true);
     setHistoryError("");
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/invoices/customer/${customerId}`);
+      const response = await axios.get(`${API_BASE_URL}/api/invoices/me`);
       setHistoryInvoices(response.data);
       setSelectedHistoryInvoice((currentSelection) => {
         if (!response.data.length) {
@@ -289,6 +325,11 @@ export default function Invoice() {
         );
       });
     } catch (error) {
+      if (error.response?.status === 401) {
+        navigate("/login");
+        return;
+      }
+
       setHistoryError(
         error.response?.data?.error || "Unable to load invoice history. Please try again."
       );
@@ -482,7 +523,6 @@ export default function Invoice() {
         lineItems,
         gstSlab: gstRate,
         totalPrice: grandTotal,
-        customerMobileNumber: loggedInUser.mobileNumber,
       });
 
       const savedInvoice = {
@@ -501,7 +541,7 @@ export default function Invoice() {
       setSelectedHistoryInvoice(savedInvoice);
       setActiveView("history");
       await resetInvoiceForm();
-      fetchInvoiceHistory(loggedInUser._id);
+      fetchInvoiceHistory();
       alert("Invoice saved successfully");
     } catch (error) {
       alert(error.response?.data?.error || `Error saving invoice: ${error.message}`);
@@ -547,8 +587,12 @@ export default function Invoice() {
   };
 
   const handleLogout = () => {
-    clearAuthUser();
-    navigate("/login");
+    axios
+      .post(`${API_BASE_URL}/api/customers/logout`)
+      .catch(() => {})
+      .finally(() => {
+        navigate("/login");
+      });
   };
 
   const selectedHistorySubtotal = selectedHistoryInvoice
@@ -876,7 +920,7 @@ export default function Invoice() {
             <button
               type="button"
               className="secondary-btn toolbar-btn"
-              onClick={() => fetchInvoiceHistory(loggedInUser?._id)}
+              onClick={() => fetchInvoiceHistory()}
               disabled={!loggedInUser?._id || historyLoading}
             >
               {historyLoading ? "Refreshing..." : "Refresh"}

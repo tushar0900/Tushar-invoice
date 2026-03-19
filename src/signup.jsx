@@ -5,9 +5,9 @@ import API_BASE_URL from "./api";
 import "./App.css";
 
 const passwordPolicy =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8}$/;
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,72}$/;
 const passwordPolicyMessage =
-  "Password must be exactly 8 characters and include uppercase, lowercase, number, and special character.";
+  "Password must be 12 to 72 characters and include uppercase, lowercase, number, and special character.";
 
 function PasswordVisibilityIcon({ visible }) {
   if (visible) {
@@ -102,7 +102,11 @@ export default function Signup() {
       alert("Registration successful. Please login.");
       navigate("/login", { state: { registeredName: cleaned.name } });
     } catch (error) {
-      if (error.response?.status === 400 || error.response?.status === 409) {
+      if (
+        error.response?.status === 400 ||
+        error.response?.status === 409 ||
+        error.response?.status === 429
+      ) {
         alert(error.response?.data?.error || "Unable to complete registration.");
       } else if (!error.response) {
         alert("Unable to reach server. Please try again.");
@@ -146,7 +150,7 @@ export default function Signup() {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              maxLength={8}
+              maxLength={72}
               required
             />
             <button
@@ -160,7 +164,7 @@ export default function Signup() {
             </button>
           </div>
           <small className="field-hint">
-            Use exactly 8 characters with uppercase, lowercase, number, and special character.
+            Use 12 to 72 characters with uppercase, lowercase, number, and special character.
           </small>
         </div>
       </div>

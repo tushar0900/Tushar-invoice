@@ -1,19 +1,39 @@
 import express from "express";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import Customer from "../models/customer.js";
+import Invoice from "../models/invoice.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { clearAuthCookie, setAuthCookie, signAuthToken } from "../utils/auth.js";
 
 const router = express.Router();
+const BCRYPT_ROUNDS = 12;
 const passwordPolicy =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8}$/;
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,72}$/;
 const passwordPolicyMessage =
-  "Password must be exactly 8 characters and include uppercase, lowercase, number, and special character.";
+  "Password must be 12 to 72 characters and include uppercase, lowercase, number, and special character.";
+const signupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many signup attempts. Please try again later." },
+});
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts. Please try again later." },
+});
 
 function sanitizeCustomer(customer) {
   if (!customer) {
     return customer;
   }
 
-  const { password: _password, ...safeCustomer } = customer;
+  const rawCustomer = typeof customer.toObject === "function" ? customer.toObject() : customer;
+  const { password: _password, ...safeCustomer } = rawCustomer;
   return safeCustomer;
 }
 
@@ -21,90 +41,152 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function getDuplicateFieldMessage(field) {
-  if (field === "mobileNumber") {
-    return "Mobile number already registered. Please login.";
-  }
+function normalizeName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
-  if (field === "name") {
-    return "Customer name already registered. Please choose another name or login.";
-  }
+function normalizeMobileNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
 
-  return "Customer already exists.";
+function normalizeAddress(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeGstNumber(value) {
+  return String(value || "").trim().toUpperCase();
 }
 
 function isValidPassword(password) {
   return passwordPolicy.test(password || "");
 }
 
-// Create Customer
-router.post("/", async (req, res) => {
+function isValidMobileNumber(mobileNumber) {
+  return /^\d{10,15}$/.test(mobileNumber);
+}
+
+function isValidGstNumber(gstNumber) {
+  return /^[0-9A-Z]{15}$/.test(gstNumber);
+}
+
+function buildCustomerPayload(body) {
+  return {
+    mobileNumber: normalizeMobileNumber(body.mobileNumber),
+    name: normalizeName(body.name),
+    password: String(body.password || ""),
+    address: normalizeAddress(body.address),
+    gstNumber: normalizeGstNumber(body.gstNumber),
+  };
+}
+
+function validateCustomerPayload(payload, { requirePassword = true } = {}) {
+  if (!payload.mobileNumber || !payload.name || !payload.address || !payload.gstNumber) {
+    return "Mobile number, name, address, and GST number are required.";
+  }
+
+  if (requirePassword && !payload.password) {
+    return "Password is required.";
+  }
+
+  if (!isValidMobileNumber(payload.mobileNumber)) {
+    return "Mobile number must contain 10 to 15 digits.";
+  }
+
+  if (payload.name.length < 2 || payload.name.length > 80) {
+    return "Customer name must be between 2 and 80 characters.";
+  }
+
+  if (payload.address.length < 5 || payload.address.length > 300) {
+    return "Address must be between 5 and 300 characters.";
+  }
+
+  if (!isValidGstNumber(payload.gstNumber)) {
+    return "GST number must be 15 uppercase letters or digits.";
+  }
+
+  if (requirePassword && !isValidPassword(payload.password)) {
+    return passwordPolicyMessage;
+  }
+
+  if (!requirePassword && payload.password && !isValidPassword(payload.password)) {
+    return passwordPolicyMessage;
+  }
+
+  return "";
+}
+
+function isSelfRequest(req, customerId) {
+  return String(req.auth.customerId) === String(customerId);
+}
+
+async function ensureUniqueCustomerFields({ mobileNumber, name, excludeCustomerId = "" }) {
+  const mobileQuery = { mobileNumber };
+  if (excludeCustomerId) {
+    mobileQuery._id = { $ne: excludeCustomerId };
+  }
+
+  const mobileConflict = await Customer.findOne(mobileQuery);
+
+  if (mobileConflict) {
+    return "Mobile number already registered. Please login.";
+  }
+
+  const nameQuery = {
+    name: new RegExp(`^${escapeRegex(name)}$`, "i"),
+  };
+  if (excludeCustomerId) {
+    nameQuery._id = { $ne: excludeCustomerId };
+  }
+
+  const nameConflict = await Customer.findOne(nameQuery);
+
+  if (nameConflict) {
+    return "Customer name already registered. Please choose another name or login.";
+  }
+
+  return "";
+}
+
+router.post("/", signupLimiter, async (req, res) => {
   try {
-    const mobileNumber = req.body.mobileNumber?.trim();
-    const name = req.body.name?.trim();
-    const password = req.body.password;
-    const address = req.body.address?.trim();
-    const gstNumber = req.body.gstNumber?.trim();
+    const payload = buildCustomerPayload(req.body);
+    const validationError = validateCustomerPayload(payload);
 
-    if (!mobileNumber || !name || !password || !address || !gstNumber) {
-      return res.status(400).json({
-        error: "Mobile number, name, password, address, and GST number are required.",
-      });
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
 
-    if (!isValidPassword(password)) {
-      return res.status(400).json({ error: passwordPolicyMessage });
-    }
-
-    const existingByMobile = await Customer.findOne({ mobileNumber });
-    if (existingByMobile) {
-      if (!existingByMobile.password) {
-        existingByMobile.name = name;
-        existingByMobile.password = await bcrypt.hash(password, 10);
-        existingByMobile.address = address;
-        existingByMobile.gstNumber = gstNumber;
-        await existingByMobile.save();
-        return res.status(200).json(sanitizeCustomer(existingByMobile.toObject()));
-      }
-
-      return res.status(409).json({
-        error: "Mobile number already registered. Please login.",
-      });
-    }
-
-    const existingByName = await Customer.findOne({
-      name: new RegExp(`^${escapeRegex(name)}$`, "i"),
-    });
-
-    if (existingByName) {
-      return res.status(409).json({
-        error: "Customer name already registered. Please login.",
-      });
+    const uniquenessError = await ensureUniqueCustomerFields(payload);
+    if (uniquenessError) {
+      return res.status(409).json({ error: uniquenessError });
     }
 
     const customer = await Customer.create({
-      mobileNumber,
-      name,
-      password: await bcrypt.hash(password, 10),
-      address,
-      gstNumber,
+      mobileNumber: payload.mobileNumber,
+      name: payload.name,
+      password: await bcrypt.hash(payload.password, BCRYPT_ROUNDS),
+      address: payload.address,
+      gstNumber: payload.gstNumber,
     });
 
-    res.status(201).json(sanitizeCustomer(customer.toObject()));
+    return res.status(201).json(sanitizeCustomer(customer));
   } catch (err) {
-    if (err.code === 11000) {
-      const field = Object.keys(err.keyPattern || {})[0];
-      return res.status(409).json({ error: getDuplicateFieldMessage(field) });
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: "Customer already exists." });
     }
 
-    res.status(400).json({ error: err.message });
+    return res.status(500).json({ error: "Unable to create customer right now." });
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
-    const name = req.body.name?.trim();
-    const password = req.body.password;
+    const name = normalizeName(req.body.name);
+    const password = String(req.body.password || "");
 
     if (!name || !password) {
       return res.status(400).json({ error: "Customer name and password are required." });
@@ -112,7 +194,7 @@ router.post("/login", async (req, res) => {
 
     const customer = await Customer.findOne({
       name: new RegExp(`^${escapeRegex(name)}$`, "i"),
-    });
+    }).select("+password");
 
     if (!customer || !customer.password) {
       return res.status(401).json({ error: "Invalid name or password." });
@@ -123,87 +205,163 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid name or password." });
     }
 
-    res.json(sanitizeCustomer(customer.toObject()));
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Get All Customers
-router.get("/", async (req, res) => {
-  try {
-    const customers = await Customer.find();
-    res.json(customers.map((customer) => sanitizeCustomer(customer.toObject())));
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Get Customer by Mobile Number
-router.get("/mobile/:mobileNumber", async (req, res) => {
-  try {
-    const customer = await Customer.findOne({
-      mobileNumber: req.params.mobileNumber,
+    const authToken = signAuthToken({
+      customerId: customer.id,
+      mobileNumber: customer.mobileNumber,
     });
-    if (!customer) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
-    res.json(sanitizeCustomer(customer.toObject()));
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+
+    setAuthCookie(res, authToken);
+    return res.json(sanitizeCustomer(customer));
+  } catch {
+    return res.status(500).json({ error: "Unable to login right now." });
   }
 });
 
-// Get Customer by ID
-router.get("/:id", async (req, res) => {
+router.post("/logout", (req, res) => {
+  clearAuthCookie(res);
+  return res.status(204).end();
+});
+
+router.get("/me", requireAuth, (req, res) => {
+  return res.json(sanitizeCustomer(req.customer));
+});
+
+router.get("/", requireAuth, (_req, res) => {
+  return res.status(403).json({ error: "Customer listing is not available." });
+});
+
+router.get("/mobile/:mobileNumber", requireAuth, async (req, res) => {
   try {
-    const customer = await Customer.findById(req.params.id);
-    if (!customer) {
-      return res.status(404).json({ error: "Customer not found" });
+    const mobileNumber = normalizeMobileNumber(req.params.mobileNumber);
+
+    if (mobileNumber !== req.auth.mobileNumber) {
+      return res.status(403).json({ error: "You can only access your own customer record." });
     }
-    res.json(sanitizeCustomer(customer.toObject()));
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+
+    return res.json(sanitizeCustomer(req.customer));
+  } catch {
+    return res.status(500).json({ error: "Unable to load customer right now." });
   }
 });
 
-// Update Customer
-router.put("/:id", async (req, res) => {
+router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const updateData = { ...req.body };
+    if (!isSelfRequest(req, req.params.id)) {
+      return res.status(403).json({ error: "You can only access your own customer record." });
+    }
 
-    if (updateData.password) {
-      if (!isValidPassword(updateData.password)) {
+    return res.json(sanitizeCustomer(req.customer));
+  } catch {
+    return res.status(500).json({ error: "Unable to load customer right now." });
+  }
+});
+
+router.put("/:id", requireAuth, async (req, res) => {
+  try {
+    if (!isSelfRequest(req, req.params.id)) {
+      return res.status(403).json({ error: "You can only update your own account." });
+    }
+
+    const updateData = {};
+    const nextMobileNumber =
+      req.body.mobileNumber !== undefined
+        ? normalizeMobileNumber(req.body.mobileNumber)
+        : req.customer.mobileNumber;
+    const nextName = req.body.name !== undefined ? normalizeName(req.body.name) : req.customer.name;
+    const nextAddress =
+      req.body.address !== undefined ? normalizeAddress(req.body.address) : req.customer.address;
+    const nextGstNumber =
+      req.body.gstNumber !== undefined ? normalizeGstNumber(req.body.gstNumber) : req.customer.gstNumber;
+    const nextPassword = req.body.password ? String(req.body.password) : "";
+    const currentPassword = String(req.body.currentPassword || "");
+
+    const validationError = validateCustomerPayload(
+      {
+        mobileNumber: nextMobileNumber,
+        name: nextName,
+        password: nextPassword,
+        address: nextAddress,
+        gstNumber: nextGstNumber,
+      },
+      { requirePassword: false }
+    );
+
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+
+    const uniquenessError = await ensureUniqueCustomerFields({
+      mobileNumber: nextMobileNumber,
+      name: nextName,
+      excludeCustomerId: req.auth.customerId,
+    });
+
+    if (uniquenessError) {
+      return res.status(409).json({ error: uniquenessError });
+    }
+
+    updateData.mobileNumber = nextMobileNumber;
+    updateData.name = nextName;
+    updateData.address = nextAddress;
+    updateData.gstNumber = nextGstNumber;
+
+    if (nextPassword) {
+      if (!isValidPassword(nextPassword)) {
         return res.status(400).json({ error: passwordPolicyMessage });
       }
 
-      updateData.password = await bcrypt.hash(updateData.password, 10);
+      if (!currentPassword) {
+        return res.status(400).json({ error: "Current password is required to set a new password." });
+      }
+
+      const currentCustomer = await Customer.findById(req.auth.customerId).select("+password");
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPassword,
+        currentCustomer?.password || ""
+      );
+
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({ error: "Current password is incorrect." });
+      }
+
+      updateData.password = await bcrypt.hash(nextPassword, BCRYPT_ROUNDS);
     }
 
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
-    if (!customer) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
-    res.json(sanitizeCustomer(customer.toObject()));
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    const customer = await Customer.findByIdAndUpdate(req.auth.customerId, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
+    return res.json(sanitizeCustomer(customer));
+  } catch {
+    return res.status(500).json({ error: "Unable to update customer right now." });
   }
 });
 
-// Delete Customer
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAuth, async (req, res) => {
   try {
-    const customer = await Customer.findByIdAndDelete(req.params.id);
-    if (!customer) {
-      return res.status(404).json({ error: "Customer not found" });
+    if (!isSelfRequest(req, req.params.id)) {
+      return res.status(403).json({ error: "You can only delete your own account." });
     }
-    res.json({ message: "Customer deleted successfully" });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+
+    const currentPassword = String(req.body.currentPassword || "");
+    if (!currentPassword) {
+      return res.status(400).json({ error: "Current password is required to delete your account." });
+    }
+
+    const customer = await Customer.findById(req.auth.customerId).select("+password");
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, customer?.password || "");
+
+    if (!isCurrentPasswordValid) {
+      return res.status(401).json({ error: "Current password is incorrect." });
+    }
+
+    await Invoice.deleteMany({ customerId: req.auth.customerId });
+    await Customer.findByIdAndDelete(req.auth.customerId);
+    clearAuthCookie(res);
+    return res.json({ message: "Customer deleted successfully" });
+  } catch {
+    return res.status(500).json({ error: "Unable to delete customer right now." });
   }
 });
 

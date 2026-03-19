@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import API_BASE_URL from "./api";
-import { setAuthUser } from "./authStorage";
 import "./App.css";
 
 function PasswordVisibilityIcon({ visible }) {
@@ -57,6 +56,27 @@ export default function Login() {
     password: "",
   });
 
+  useEffect(() => {
+    let isActive = true;
+
+    const hydrateSession = async () => {
+      try {
+        await axios.get(`${API_BASE_URL}/api/customers/me`);
+        if (isActive) {
+          navigate("/invoice", { replace: true });
+        }
+      } catch {
+        // Stay on login when there is no active authenticated session.
+      }
+    };
+
+    hydrateSession();
+
+    return () => {
+      isActive = false;
+    };
+  }, [navigate]);
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -76,22 +96,18 @@ export default function Login() {
     }
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/customers/login`, {
+      await axios.post(`${API_BASE_URL}/api/customers/login`, {
         name,
         password,
       });
 
-      setAuthUser({
-        _id: response.data._id,
-        name: response.data.name,
-        mobileNumber: response.data.mobileNumber,
-        address: response.data.address,
-        gstNumber: response.data.gstNumber,
-      });
-
       navigate("/invoice");
     } catch (error) {
-      if (error.response?.status === 400 || error.response?.status === 401) {
+      if (
+        error.response?.status === 400 ||
+        error.response?.status === 401 ||
+        error.response?.status === 429
+      ) {
         alert(error.response?.data?.error || "Invalid name or password");
         return;
       }
