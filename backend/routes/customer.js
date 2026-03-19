@@ -13,7 +13,7 @@ function sanitizeCustomer(customer) {
     return customer;
   }
 
-  const { password, ...safeCustomer } = customer;
+  const { password: _password, ...safeCustomer } = customer;
   return safeCustomer;
 }
 

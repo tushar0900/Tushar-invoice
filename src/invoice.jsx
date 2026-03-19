@@ -114,7 +114,7 @@ export default function Invoice() {
         if (isActive) {
           applyLoggedInCustomer(hydratedUser);
         }
-      } catch (error) {
+      } catch {
         clearAuthUser();
         if (isActive) {
           navigate("/login");
@@ -517,9 +517,9 @@ export default function Invoice() {
     : 0;
 
   return (
-    <div className="annexure">
+    <div className="annexure invoice-page">
       <div className="page-toolbar">
-        <div>
+        <div className="toolbar-copy">
           <h2>{activeView === "history" ? "Invoice History" : "Generate Invoice"}</h2>
           <small>
             Signed in as <strong>{name || "Customer"}</strong>
@@ -681,42 +681,44 @@ export default function Invoice() {
               </div>
             </div>
 
-            <table className="invoice-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Rate</th>
-                  <th>Quantity</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {lineItems.map((item, index) => (
-                  <tr key={`${item.product}-${index}`}>
-                    <td>{item.product}</td>
-                    <td>Rs. {item.rate.toFixed(2)}</td>
-                    <td>{item.quantity}</td>
-                    <td>Rs. {item.total.toFixed(2)}</td>
+            <div className="table-shell table-shell-preview">
+              <table className="invoice-table invoice-preview-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Rate</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
                   </tr>
-                ))}
-                <tr className="totals-row">
-                  <td colSpan="2"></td>
-                  <td>Subtotal:</td>
-                  <td>Rs. {subtotal.toFixed(2)}</td>
-                </tr>
-                <tr className="totals-row">
-                  <td colSpan="2"></td>
-                  <td>GST ({gstRate}%):</td>
-                  <td>Rs. {gstAmount.toFixed(2)}</td>
-                </tr>
-                <tr className="totals-row total-highlight">
-                  <td colSpan="2"></td>
-                  <td>Grand Total:</td>
-                  <td>Rs. {grandTotal.toFixed(2)}</td>
-                </tr>
-              </tbody>
-            </table>
+                </thead>
+
+                <tbody>
+                  {lineItems.map((item, index) => (
+                    <tr key={`${item.product}-${index}`}>
+                      <td>{item.product}</td>
+                      <td>Rs. {item.rate.toFixed(2)}</td>
+                      <td>{item.quantity}</td>
+                      <td>Rs. {item.total.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  <tr className="totals-row">
+                    <td colSpan="2"></td>
+                    <td>Subtotal:</td>
+                    <td>Rs. {subtotal.toFixed(2)}</td>
+                  </tr>
+                  <tr className="totals-row">
+                    <td colSpan="2"></td>
+                    <td>GST ({gstRate}%):</td>
+                    <td>Rs. {gstAmount.toFixed(2)}</td>
+                  </tr>
+                  <tr className="totals-row total-highlight">
+                    <td colSpan="2"></td>
+                    <td>Grand Total:</td>
+                    <td>Rs. {grandTotal.toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             <div className="amount-words">
               <label>Amount in words:</label>
@@ -724,86 +726,89 @@ export default function Invoice() {
             </div>
           </div>
 
-          <table className="invoice-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Rate</th>
-                <th>Quantity</th>
-                <th>Total</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {lineItems.map((item, index) => (
-                <tr key={index}>
-                  <td>
-                    <input
-                      value={item.product}
-                      onChange={(e) => handleLineItemChange(index, "product", e.target.value)}
-                      placeholder="Product name"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={item.rate}
-                      onChange={(e) => handleLineItemChange(index, "rate", e.target.value)}
-                      placeholder="Rate"
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => handleLineItemChange(index, "quantity", e.target.value)}
-                      placeholder="Qty"
-                    />
-                  </td>
-                  <td>
-                    <input value={item.total} disabled />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="remove-btn"
-                      onClick={() => removeRow(index)}
-                      title="Remove row"
-                    >
-                      X
-                    </button>
-                  </td>
+          <div className="table-shell table-shell-editor">
+            <table className="invoice-table invoice-editor-table responsive-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Rate</th>
+                  <th>Quantity</th>
+                  <th>Total</th>
+                  <th>Action</th>
                 </tr>
-              ))}
+              </thead>
 
-              <tr>
-                <td colSpan="5">
-                  <button type="button" className="add-row-btn" onClick={addRow}>
-                    + Add Row
-                  </button>
-                </td>
-              </tr>
+              <tbody>
+                {lineItems.map((item, index) => (
+                  <tr key={index}>
+                    <td data-label="Product">
+                      <input
+                        value={item.product}
+                        onChange={(e) => handleLineItemChange(index, "product", e.target.value)}
+                        placeholder="Product name"
+                      />
+                    </td>
+                    <td data-label="Rate">
+                      <input
+                        type="number"
+                        value={item.rate}
+                        onChange={(e) => handleLineItemChange(index, "rate", e.target.value)}
+                        placeholder="Rate"
+                      />
+                    </td>
+                    <td data-label="Quantity">
+                      <input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => handleLineItemChange(index, "quantity", e.target.value)}
+                        placeholder="Qty"
+                      />
+                    </td>
+                    <td data-label="Total">
+                      <input value={item.total} disabled />
+                    </td>
+                    <td data-label="Action">
+                      <button
+                        type="button"
+                        className="remove-btn"
+                        onClick={() => removeRow(index)}
+                        title="Remove row"
+                      >
+                        X
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-              <tr>
-                <td colSpan="2">
-                  <strong>GST Dropdown</strong>
-                </td>
-                <td>
-                  <select value={gstRate} onChange={(e) => setGstRate(Number(e.target.value))}>
-                    <option value="5">GST 5%</option>
-                    <option value="12">GST 12%</option>
-                    <option value="18">GST 18%</option>
-                    <option value="28">GST 28%</option>
-                  </select>
-                </td>
-                <td colSpan="2">
-                  <strong>Total</strong>
-                  <input value={grandTotal} disabled style={{ marginTop: "5px" }} />
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="invoice-editor-footer">
+            <button type="button" className="add-row-btn" onClick={addRow}>
+              + Add Row
+            </button>
+
+            <div className="invoice-summary-grid">
+              <div className="summary-field">
+                <label htmlFor="gst-rate">GST Dropdown</label>
+                <select
+                  id="gst-rate"
+                  value={gstRate}
+                  onChange={(e) => setGstRate(Number(e.target.value))}
+                >
+                  <option value="5">GST 5%</option>
+                  <option value="12">GST 12%</option>
+                  <option value="18">GST 18%</option>
+                  <option value="28">GST 28%</option>
+                </select>
+              </div>
+
+              <div className="summary-field">
+                <label>Total</label>
+                <input value={grandTotal} disabled />
+              </div>
+            </div>
+          </div>
 
           <div className="amount-words">
             <label>Amount in words</label>
@@ -844,48 +849,50 @@ export default function Invoice() {
             <div className="history-empty-state">No invoices saved yet for this account.</div>
           ) : (
             <>
-              <table className="invoice-table history-table">
-                <thead>
-                  <tr>
-                    <th>Invoice</th>
-                    <th>Date</th>
-                    <th>Items</th>
-                    <th>Total</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {historyInvoices.map((invoice) => (
-                    <tr key={invoice._id}>
-                      <td>{invoice.invoiceNumber}</td>
-                      <td>{formatDateTime(invoice.createdAt)}</td>
-                      <td>{invoice.lineItems.length}</td>
-                      <td>Rs. {Number(invoice.totalPrice).toFixed(2)}</td>
-                      <td>
-                        <div className="history-actions">
-                          <button
-                            type="button"
-                            className={`edit-btn ${
-                              selectedHistoryInvoice?._id === invoice._id ? "history-active" : ""
-                            }`}
-                            onClick={() => setSelectedHistoryInvoice(invoice)}
-                          >
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            className="download-btn history-download-btn"
-                            onClick={() => downloadInvoicePdf(invoice)}
-                          >
-                            Download
-                          </button>
-                        </div>
-                      </td>
+              <div className="table-shell table-shell-history">
+                <table className="invoice-table history-table responsive-table">
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Date</th>
+                      <th>Items</th>
+                      <th>Total</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+
+                  <tbody>
+                    {historyInvoices.map((invoice) => (
+                      <tr key={invoice._id}>
+                        <td data-label="Invoice">{invoice.invoiceNumber}</td>
+                        <td data-label="Date">{formatDateTime(invoice.createdAt)}</td>
+                        <td data-label="Items">{invoice.lineItems.length}</td>
+                        <td data-label="Total">Rs. {Number(invoice.totalPrice).toFixed(2)}</td>
+                        <td data-label="Actions">
+                          <div className="history-actions">
+                            <button
+                              type="button"
+                              className={`edit-btn ${
+                                selectedHistoryInvoice?._id === invoice._id ? "history-active" : ""
+                              }`}
+                              onClick={() => setSelectedHistoryInvoice(invoice)}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              className="download-btn history-download-btn"
+                              onClick={() => downloadInvoicePdf(invoice)}
+                            >
+                              Download
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {selectedHistoryInvoice ? (
                 <div className="history-detail">
@@ -915,42 +922,44 @@ export default function Invoice() {
                     </div>
                   </div>
 
-                  <table className="invoice-table">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th>Rate</th>
-                        <th>Quantity</th>
-                        <th>Total</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {selectedHistoryInvoice.lineItems.map((item, index) => (
-                        <tr key={`${item.product}-${index}`}>
-                          <td>{item.product}</td>
-                          <td>Rs. {Number(item.rate).toFixed(2)}</td>
-                          <td>{item.quantity}</td>
-                          <td>Rs. {Number(item.total).toFixed(2)}</td>
+                  <div className="table-shell table-shell-detail">
+                    <table className="invoice-table invoice-detail-table">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Rate</th>
+                          <th>Quantity</th>
+                          <th>Total</th>
                         </tr>
-                      ))}
-                      <tr className="totals-row">
-                        <td colSpan="2"></td>
-                        <td>Subtotal:</td>
-                        <td>Rs. {selectedHistorySubtotal.toFixed(2)}</td>
-                      </tr>
-                      <tr className="totals-row">
-                        <td colSpan="2"></td>
-                        <td>GST ({selectedHistoryInvoice.gstSlab}%):</td>
-                        <td>Rs. {selectedHistoryGst.toFixed(2)}</td>
-                      </tr>
-                      <tr className="totals-row total-highlight">
-                        <td colSpan="2"></td>
-                        <td>Grand Total:</td>
-                        <td>Rs. {Number(selectedHistoryInvoice.totalPrice).toFixed(2)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                      </thead>
+
+                      <tbody>
+                        {selectedHistoryInvoice.lineItems.map((item, index) => (
+                          <tr key={`${item.product}-${index}`}>
+                            <td>{item.product}</td>
+                            <td>Rs. {Number(item.rate).toFixed(2)}</td>
+                            <td>{item.quantity}</td>
+                            <td>Rs. {Number(item.total).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                        <tr className="totals-row">
+                          <td colSpan="2"></td>
+                          <td>Subtotal:</td>
+                          <td>Rs. {selectedHistorySubtotal.toFixed(2)}</td>
+                        </tr>
+                        <tr className="totals-row">
+                          <td colSpan="2"></td>
+                          <td>GST ({selectedHistoryInvoice.gstSlab}%):</td>
+                          <td>Rs. {selectedHistoryGst.toFixed(2)}</td>
+                        </tr>
+                        <tr className="totals-row total-highlight">
+                          <td colSpan="2"></td>
+                          <td>Grand Total:</td>
+                          <td>Rs. {Number(selectedHistoryInvoice.totalPrice).toFixed(2)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
 
                   <div className="amount-words">
                     <label>Amount in words</label>
