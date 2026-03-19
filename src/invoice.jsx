@@ -40,9 +40,89 @@ function formatOcrStatus(status, progress) {
   return `${label} ${Math.round(progress * 100)}%`;
 }
 
+function buildInvoiceMarkup({
+  invoiceNumber,
+  customerName,
+  companyName,
+  address,
+  gstNumber,
+  lineItems,
+  gstSlab,
+  totalPrice,
+}) {
+  const invoiceSubtotal = lineItems.reduce((sum, item) => sum + Number(item.total), 0);
+  const invoiceGstAmount = (invoiceSubtotal * Number(gstSlab)) / 100;
+
+  return `
+    <div style="padding:20px;background:#fff;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+      <div style="text-align:center;margin-bottom:30px;">
+        <h1 style="margin:0 0 10px;font-size:28px;font-weight:700;">INVOICE</h1>
+        <p style="margin:0;font-size:14px;color:#666;">
+          Invoice #: <strong>${invoiceNumber}</strong>
+        </p>
+      </div>
+      <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;">
+        <strong style="min-width:140px;">Invoice Number:</strong>
+        <span>${invoiceNumber}</span>
+      </div>
+      <div style="border:1px solid #e6eaec;border-left:4px solid #2c7a7b;border-radius:10px;padding:18px;margin-bottom:20px;background:#f7f8f9;">
+        <h4 style="margin:0 0 14px;color:#225e60;text-transform:uppercase;font-size:16px;">Customer Information</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div><strong>Name:</strong><br />${customerName || "-"}</div>
+          <div><strong>Company Name:</strong><br />${companyName || "-"}</div>
+          <div><strong>Address:</strong><br />${address || "-"}</div>
+          <div><strong>GST Number:</strong><br />${gstNumber || "-"}</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+        <thead>
+          <tr>
+            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Product</th>
+            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Rate</th>
+            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Quantity</th>
+            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lineItems
+            .map(
+              (item) => `
+                <tr>
+                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.product}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.rate).toFixed(2)}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.quantity}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.total).toFixed(2)}</td>
+                </tr>
+              `
+            )
+            .join("")}
+          <tr>
+            <td colspan="2"></td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Subtotal:</td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceSubtotal.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td colspan="2"></td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">GST (${gstSlab}%):</td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceGstAmount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td colspan="2"></td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Grand Total:</td>
+            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Rs. ${Number(totalPrice).toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="border:1px solid #e6eaec;border-radius:10px;padding:18px;background:#f7f8f9;">
+        <strong style="display:block;margin-bottom:10px;">Amount in words</strong>
+        <div>${numberToWords(Number(totalPrice))}</div>
+      </div>
+    </div>
+  `;
+}
+
 export default function Invoice() {
   const navigate = useNavigate();
-  const invoiceRef = useRef(null);
   const receiptPreviewUrlRef = useRef(null);
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [invoiceNo, setInvoiceNo] = useState("");
@@ -250,76 +330,18 @@ export default function Invoice() {
   };
 
   const buildHistoryMarkup = (invoice) => {
-    const invoiceSubtotal = invoice.lineItems.reduce((sum, item) => sum + Number(item.total), 0);
-    const invoiceGstAmount = (invoiceSubtotal * Number(invoice.gstSlab)) / 100;
     const invoiceCustomer = invoice.customerId || loggedInUser || {};
 
-    return `
-      <div style="padding:20px;background:#fff;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-        <div style="text-align:center;margin-bottom:30px;">
-          <h1 style="margin:0 0 10px;font-size:28px;font-weight:700;">INVOICE</h1>
-          <p style="margin:0;font-size:14px;color:#666;">
-            Invoice #: <strong>${invoice.invoiceNumber}</strong>
-          </p>
-        </div>
-        <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;">
-          <strong style="min-width:140px;">Invoice Number:</strong>
-          <span>${invoice.invoiceNumber}</span>
-        </div>
-        <div style="border:1px solid #e6eaec;border-left:4px solid #2c7a7b;border-radius:10px;padding:18px;margin-bottom:20px;background:#f7f8f9;">
-          <h4 style="margin:0 0 14px;color:#225e60;text-transform:uppercase;font-size:16px;">Customer Information</h4>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-            <div><strong>Name:</strong><br />${invoiceCustomer.name || name}</div>
-            <div><strong>Company Name:</strong><br />${invoice.companyName || "-"}</div>
-            <div><strong>Address:</strong><br />${invoiceCustomer.address || address}</div>
-            <div><strong>GST Number:</strong><br />${invoiceCustomer.gstNumber || gstNo}</div>
-          </div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-          <thead>
-            <tr>
-              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Product</th>
-              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Rate</th>
-              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Quantity</th>
-              <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${invoice.lineItems
-              .map(
-                (item) => `
-                  <tr>
-                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.product}</td>
-                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.rate).toFixed(2)}</td>
-                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.quantity}</td>
-                    <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.total).toFixed(2)}</td>
-                  </tr>
-                `
-              )
-              .join("")}
-            <tr>
-              <td colspan="2"></td>
-              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Subtotal:</td>
-              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceSubtotal.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td colspan="2"></td>
-              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">GST (${invoice.gstSlab}%):</td>
-              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceGstAmount.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td colspan="2"></td>
-              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Grand Total:</td>
-              <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Rs. ${Number(invoice.totalPrice).toFixed(2)}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div style="border:1px solid #e6eaec;border-radius:10px;padding:18px;background:#f7f8f9;">
-          <strong style="display:block;margin-bottom:10px;">Amount in words</strong>
-          <div>${numberToWords(Number(invoice.totalPrice))}</div>
-        </div>
-      </div>
-    `;
+    return buildInvoiceMarkup({
+      invoiceNumber: invoice.invoiceNumber,
+      customerName: invoiceCustomer.name || name,
+      companyName: invoice.companyName || "-",
+      address: invoiceCustomer.address || address,
+      gstNumber: invoiceCustomer.gstNumber || gstNo,
+      lineItems: invoice.lineItems,
+      gstSlab: invoice.gstSlab,
+      totalPrice: invoice.totalPrice,
+    });
   };
 
   const downloadInvoicePdf = (invoice) => {
@@ -487,12 +509,32 @@ export default function Invoice() {
   };
 
   const handleDownloadPDF = () => {
-    if (!invoiceNo || !loggedInUser?.mobileNumber || lineItems.length === 0) {
-      alert("Please fill all required fields and save invoice first");
+    if (!invoiceNo || !loggedInUser?.mobileNumber || !companyName.trim() || lineItems.length === 0) {
+      alert("Please fill all required fields before downloading the invoice.");
       return;
     }
 
-    const element = invoiceRef.current;
+    const validItems = lineItems.every(
+      (item) => item.product && item.rate > 0 && item.quantity > 0
+    );
+
+    if (!validItems) {
+      alert("Please fill all line item details before downloading the invoice.");
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildInvoiceMarkup({
+      invoiceNumber: invoiceNo,
+      customerName: name,
+      companyName: companyName.trim(),
+      address,
+      gstNumber: gstNo,
+      lineItems,
+      gstSlab: gstRate,
+      totalPrice: grandTotal,
+    });
+
     const options = {
       margin: 10,
       filename: `Invoice-${invoiceNo}.pdf`,
@@ -501,7 +543,7 @@ export default function Invoice() {
       jsPDF: { orientation: "portrait", unit: "mm", format: "a4" },
     };
 
-    html2pdf().set(options).from(element).save();
+    html2pdf().set(options).from(wrapper).save();
   };
 
   const handleLogout = () => {
@@ -646,7 +688,7 @@ export default function Invoice() {
             </div>
           </div>
 
-          <div ref={invoiceRef} className="invoice-preview">
+          <div className="invoice-preview">
             <div className="invoice-preview-header">
               <h1>INVOICE</h1>
               <p>
@@ -682,7 +724,7 @@ export default function Invoice() {
             </div>
 
             <div className="table-shell table-shell-preview">
-              <table className="invoice-table invoice-preview-table">
+              <table className="invoice-table invoice-preview-table responsive-table">
                 <thead>
                   <tr>
                     <th>Product</th>
@@ -695,29 +737,29 @@ export default function Invoice() {
                 <tbody>
                   {lineItems.map((item, index) => (
                     <tr key={`${item.product}-${index}`}>
-                      <td>{item.product}</td>
-                      <td>Rs. {item.rate.toFixed(2)}</td>
-                      <td>{item.quantity}</td>
-                      <td>Rs. {item.total.toFixed(2)}</td>
+                      <td data-label="Product">{item.product || "-"}</td>
+                      <td data-label="Rate">Rs. {item.rate.toFixed(2)}</td>
+                      <td data-label="Quantity">{item.quantity}</td>
+                      <td data-label="Total">Rs. {item.total.toFixed(2)}</td>
                     </tr>
                   ))}
-                  <tr className="totals-row">
-                    <td colSpan="2"></td>
-                    <td>Subtotal:</td>
-                    <td>Rs. {subtotal.toFixed(2)}</td>
-                  </tr>
-                  <tr className="totals-row">
-                    <td colSpan="2"></td>
-                    <td>GST ({gstRate}%):</td>
-                    <td>Rs. {gstAmount.toFixed(2)}</td>
-                  </tr>
-                  <tr className="totals-row total-highlight">
-                    <td colSpan="2"></td>
-                    <td>Grand Total:</td>
-                    <td>Rs. {grandTotal.toFixed(2)}</td>
-                  </tr>
                 </tbody>
               </table>
+            </div>
+
+            <div className="invoice-totals-grid">
+              <div className="totals-card">
+                <label>Subtotal</label>
+                <strong>Rs. {subtotal.toFixed(2)}</strong>
+              </div>
+              <div className="totals-card">
+                <label>GST ({gstRate}%)</label>
+                <strong>Rs. {gstAmount.toFixed(2)}</strong>
+              </div>
+              <div className="totals-card totals-card-emphasis">
+                <label>Grand Total</label>
+                <strong>Rs. {grandTotal.toFixed(2)}</strong>
+              </div>
             </div>
 
             <div className="amount-words">
@@ -923,7 +965,7 @@ export default function Invoice() {
                   </div>
 
                   <div className="table-shell table-shell-detail">
-                    <table className="invoice-table invoice-detail-table">
+                    <table className="invoice-table invoice-detail-table responsive-table">
                       <thead>
                         <tr>
                           <th>Product</th>
@@ -936,29 +978,29 @@ export default function Invoice() {
                       <tbody>
                         {selectedHistoryInvoice.lineItems.map((item, index) => (
                           <tr key={`${item.product}-${index}`}>
-                            <td>{item.product}</td>
-                            <td>Rs. {Number(item.rate).toFixed(2)}</td>
-                            <td>{item.quantity}</td>
-                            <td>Rs. {Number(item.total).toFixed(2)}</td>
+                            <td data-label="Product">{item.product || "-"}</td>
+                            <td data-label="Rate">Rs. {Number(item.rate).toFixed(2)}</td>
+                            <td data-label="Quantity">{item.quantity}</td>
+                            <td data-label="Total">Rs. {Number(item.total).toFixed(2)}</td>
                           </tr>
                         ))}
-                        <tr className="totals-row">
-                          <td colSpan="2"></td>
-                          <td>Subtotal:</td>
-                          <td>Rs. {selectedHistorySubtotal.toFixed(2)}</td>
-                        </tr>
-                        <tr className="totals-row">
-                          <td colSpan="2"></td>
-                          <td>GST ({selectedHistoryInvoice.gstSlab}%):</td>
-                          <td>Rs. {selectedHistoryGst.toFixed(2)}</td>
-                        </tr>
-                        <tr className="totals-row total-highlight">
-                          <td colSpan="2"></td>
-                          <td>Grand Total:</td>
-                          <td>Rs. {Number(selectedHistoryInvoice.totalPrice).toFixed(2)}</td>
-                        </tr>
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="invoice-totals-grid">
+                    <div className="totals-card">
+                      <label>Subtotal</label>
+                      <strong>Rs. {selectedHistorySubtotal.toFixed(2)}</strong>
+                    </div>
+                    <div className="totals-card">
+                      <label>GST ({selectedHistoryInvoice.gstSlab}%)</label>
+                      <strong>Rs. {selectedHistoryGst.toFixed(2)}</strong>
+                    </div>
+                    <div className="totals-card totals-card-emphasis">
+                      <label>Grand Total</label>
+                      <strong>Rs. {Number(selectedHistoryInvoice.totalPrice).toFixed(2)}</strong>
+                    </div>
                   </div>
 
                   <div className="amount-words">
