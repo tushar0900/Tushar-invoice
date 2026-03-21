@@ -13,7 +13,9 @@ function getJwtSecret() {
   }
 
   if (isProduction) {
-    throw new Error("JWT_SECRET is required in production.");
+    throw new Error(
+      "JWT_SECRET is required in production. Set it in your deployment environment and redeploy."
+    );
   }
 
   return DEVELOPMENT_JWT_SECRET;

@@ -15,7 +15,8 @@ const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === "production";
 const HOST = process.env.HOST || (isProduction ? "0.0.0.0" : "127.0.0.1");
 const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/invoiceDB";
+  process.env.MONGODB_URI ||
+  (isProduction ? undefined : "mongodb://127.0.0.1:27017/invoiceDB");
 const defaultAllowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
@@ -27,11 +28,31 @@ const configuredAllowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .filter(Boolean);
 const allowedOrigins = new Set([...defaultAllowedOrigins, ...configuredAllowedOrigins]);
 
-if (!MONGODB_URI) {
-  console.error("MONGODB_URI is required to connect to MongoDB.");
-  process.exit(1);
+function assertServerConfiguration() {
+  if (!isProduction) {
+    return;
+  }
+
+  const missingVariables = [];
+
+  if (!process.env.MONGODB_URI) {
+    missingVariables.push("MONGODB_URI");
+  }
+
+  if (!process.env.JWT_SECRET) {
+    missingVariables.push("JWT_SECRET");
+  }
+
+  if (missingVariables.length > 0) {
+    throw new Error(
+      `Missing required environment variables in production: ${missingVariables.join(
+        ", "
+      )}. Set them in your deployment environment and redeploy.`
+    );
+  }
 }
 
+assertServerConfiguration();
 assertAuthConfiguration();
 mongoose.set("sanitizeFilter", true);
 
