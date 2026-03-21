@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 
 import customer from "./routes/customer.js";
 import invoice from "./routes/invoice.js";
-import { assertAuthConfiguration } from "./utils/auth.js";
+import { initializeAuthConfiguration } from "./utils/auth.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,10 +39,6 @@ function assertServerConfiguration() {
     missingVariables.push("MONGODB_URI");
   }
 
-  if (!process.env.JWT_SECRET) {
-    missingVariables.push("JWT_SECRET");
-  }
-
   if (missingVariables.length > 0) {
     throw new Error(
       `Missing required environment variables in production: ${missingVariables.join(
@@ -53,7 +49,6 @@ function assertServerConfiguration() {
 }
 
 assertServerConfiguration();
-assertAuthConfiguration();
 mongoose.set("sanitizeFilter", true);
 
 if (isProduction) {
@@ -101,12 +96,13 @@ const startServer = async () => {
   try {
     await mongoose.connect(MONGODB_URI);
     console.log("MongoDB connected successfully...");
+    await initializeAuthConfiguration();
 
     app.listen(PORT, HOST, () => {
       console.log(`Server running on http://${HOST}:${PORT}`);
     });
   } catch (err) {
-    console.error("MongoDB connection error!!", err.message);
+    console.error("Server startup error.", err.message);
     process.exit(1);
   }
 };
