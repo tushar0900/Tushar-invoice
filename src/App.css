@@ -92,6 +92,15 @@ small { color: var(--muted); font-size: 13px; line-height: 1.5; }
   font-size: 14px;
 }
 
+.row.single > input,
+.row.single > select,
+.row.single > textarea,
+.row.single > .input-with-action,
+.row.single > .field-stack {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
 .field-stack {
   flex: 1;
   width: 100%;
@@ -500,12 +509,14 @@ button:focus {
 .invoice-table td input,
 .invoice-table td select {
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 13px;
   background: #fff;
   min-height: 40px;
+  min-width: 0;
 }
 
 .invoice-table td select {
@@ -920,9 +931,11 @@ button:focus {
   color: var(--accent-strong);
   font-size: 16px;
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
+  min-width: 0;
 }
 
 /* Customer List */
@@ -1025,6 +1038,15 @@ button:focus {
     grid-template-columns: 1fr;
   }
 
+  .row.single > input,
+  .row.single > select,
+  .row.single > textarea,
+  .row.single > .input-with-action,
+  .row.single > .field-stack {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
   .toolbar-actions,
   .history-actions {
     width: 100%;
@@ -1061,7 +1083,12 @@ button:focus {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 860px) {
+  .invoice-summary-grid,
+  .invoice-totals-grid {
+    grid-template-columns: 1fr;
+  }
+
   .table-shell-preview,
   .table-shell-detail,
   .table-shell-editor,
@@ -1140,6 +1167,8 @@ button:focus {
   .responsive-table td select,
   .responsive-table td button {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .history-actions {
@@ -1190,6 +1219,32 @@ button:focus {
   .mode-btn,
   .secondary-btn {
     padding: 12px 14px;
+  }
+
+  .responsive-table tr {
+    padding: 14px;
+  }
+
+  .responsive-table td {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .responsive-table td + td {
+    margin-top: 12px;
+  }
+
+  .responsive-table td::before {
+    margin-bottom: 0;
+  }
+
+  .invoice-table td input,
+  .invoice-table td select,
+  .summary-field input,
+  .summary-field select,
+  .amount-words input {
+    min-height: 46px;
+    font-size: 16px;
   }
 }
 
