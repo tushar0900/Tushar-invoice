@@ -211,7 +211,10 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
 
     setAuthCookie(res, authToken);
-    return res.json(sanitizeCustomer(customer));
+    return res.json({
+      customer: sanitizeCustomer(customer),
+      authToken,
+    });
   } catch {
     return res.status(500).json({ error: "Unable to login right now." });
   }

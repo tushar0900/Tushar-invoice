@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import API_BASE_URL from "./api";
+import { setAuthSession, setAuthUser } from "./authStorage";
 import "./App.css";
 
 function PasswordVisibilityIcon({ visible }) {
@@ -61,8 +62,9 @@ export default function Login() {
 
     const hydrateSession = async () => {
       try {
-        await axios.get(`${API_BASE_URL}/api/customers/me`);
+        const response = await axios.get(`${API_BASE_URL}/api/customers/me`);
         if (isActive) {
+          setAuthUser(response.data);
           navigate("/invoice", { replace: true });
         }
       } catch {
@@ -96,9 +98,13 @@ export default function Login() {
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/api/customers/login`, {
+      const response = await axios.post(`${API_BASE_URL}/api/customers/login`, {
         name,
         password,
+      });
+      setAuthSession({
+        user: response.data.customer,
+        token: response.data.authToken,
       });
 
       navigate("/invoice");

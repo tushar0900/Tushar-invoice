@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
+import { clearAuthSession, setAuthUser } from "./authStorage";
 import { extractReceiptDraftFromText } from "./receiptParser";
 import "./App.css";
 
@@ -146,6 +147,10 @@ export default function Invoice() {
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
   const grandTotal = subtotal + gstAmount;
+  const redirectToLogin = () => {
+    clearAuthSession();
+    navigate("/login");
+  };
 
   useEffect(() => {
     const loadInvoiceNumber = async () => {
@@ -154,6 +159,7 @@ export default function Invoice() {
         setInvoiceNo(response.data.invoiceNumber);
       } catch (error) {
         if (error.response?.status === 401) {
+          clearAuthSession();
           navigate("/login");
           return;
         }
@@ -193,6 +199,7 @@ export default function Invoice() {
         }
       } catch {
         if (isActive) {
+          clearAuthSession();
           navigate("/login");
         }
       }
@@ -233,6 +240,7 @@ export default function Invoice() {
         });
       } catch (error) {
         if (error.response?.status === 401) {
+          clearAuthSession();
           navigate("/login");
           return;
         }
@@ -249,6 +257,7 @@ export default function Invoice() {
   }, [loggedInUser?._id, navigate]);
 
   const applyLoggedInCustomer = (user) => {
+    setAuthUser(user);
     setLoggedInUser(user);
     setMobile(user.mobileNumber || "");
     setName(user.name || "");
@@ -287,7 +296,7 @@ export default function Invoice() {
       setInvoiceNo(response.data.invoiceNumber);
     } catch (error) {
       if (error.response?.status === 401) {
-        navigate("/login");
+        redirectToLogin();
         return;
       }
 
@@ -326,7 +335,7 @@ export default function Invoice() {
       });
     } catch (error) {
       if (error.response?.status === 401) {
-        navigate("/login");
+        redirectToLogin();
         return;
       }
 
@@ -544,6 +553,11 @@ export default function Invoice() {
       fetchInvoiceHistory();
       alert("Invoice saved successfully");
     } catch (error) {
+      if (error.response?.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
       alert(error.response?.data?.error || `Error saving invoice: ${error.message}`);
     }
   };
@@ -591,6 +605,7 @@ export default function Invoice() {
       .post(`${API_BASE_URL}/api/customers/logout`)
       .catch(() => {})
       .finally(() => {
+        clearAuthSession();
         navigate("/login");
       });
   };
