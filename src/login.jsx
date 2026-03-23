@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import API_BASE_URL from "./api";
-import { setAuthSession, setAuthUser } from "./authStorage";
+import { clearAuthSession, setAuthSession, setAuthUser } from "./authStorage";
 import "./App.css";
 
 function PasswordVisibilityIcon({ visible }) {
@@ -102,12 +102,29 @@ export default function Login() {
         name,
         password,
       });
+      const loggedInCustomer = response.data.customer || response.data;
+
       setAuthSession({
-        user: response.data.customer,
+        user: loggedInCustomer?._id ? loggedInCustomer : null,
         token: response.data.authToken,
       });
 
-      navigate("/invoice");
+      try {
+        const sessionResponse = await axios.get(`${API_BASE_URL}/api/customers/me`);
+        setAuthUser(sessionResponse.data);
+        navigate("/invoice");
+      } catch (sessionError) {
+        clearAuthSession();
+
+        if (sessionError.response?.status === 401) {
+          alert(
+            "Login succeeded, but the session was not established. Redeploy the backend and verify ALLOWED_ORIGINS."
+          );
+          return;
+        }
+
+        throw sessionError;
+      }
     } catch (error) {
       if (
         error.response?.status === 400 ||
