@@ -101,6 +101,98 @@ function createEditableLineItems(items) {
   return nextItems.length ? nextItems : createInitialLineItems();
 }
 
+function normalizeDuplicateText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function roundCurrency(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function buildLineItemDuplicateSignature(lineItems) {
+  return (Array.isArray(lineItems) ? lineItems : [])
+    .map((item) => {
+      const product = normalizeDuplicateText(item?.product);
+      const rate = roundCurrency(item?.rate);
+      const quantity = roundCurrency(item?.quantity);
+      const total = roundCurrency(item?.total || rate * quantity);
+
+      if (!product || rate <= 0 || quantity <= 0 || total <= 0) {
+        return "";
+      }
+
+      return `${product}:${rate.toFixed(2)}:${quantity.toFixed(2)}:${total.toFixed(2)}`;
+    })
+    .filter(Boolean)
+    .sort()
+    .join("|");
+}
+
+function describeDuplicateMatch(match) {
+  if (match.sameItems && match.sameGstSlab) {
+    return "Same company, GST slab, total, and line items.";
+  }
+
+  if (match.sameItems) {
+    return "Same company, total, and line items.";
+  }
+
+  return "Same company, GST slab, and total.";
+}
+
+function findPotentialDuplicateInvoices({
+  historyInvoices,
+  companyName,
+  lineItems,
+  gstRate,
+  grandTotal,
+  excludeInvoiceId = "",
+}) {
+  const normalizedCompanyName = normalizeDuplicateText(companyName);
+  const draftLineItemSignature = buildLineItemDuplicateSignature(lineItems);
+  const roundedGrandTotal = roundCurrency(grandTotal);
+
+  if (!normalizedCompanyName || !draftLineItemSignature || roundedGrandTotal <= 0) {
+    return [];
+  }
+
+  return historyInvoices
+    .map((invoice) => {
+      const sameCompany = normalizeDuplicateText(invoice?.companyName) === normalizedCompanyName;
+      const sameGstSlab = Number(invoice?.gstSlab) === Number(gstRate);
+      const sameTotal = roundCurrency(invoice?.totalPrice) === roundedGrandTotal;
+      const sameItems =
+        buildLineItemDuplicateSignature(invoice?.lineItems) === draftLineItemSignature;
+      const score = [sameCompany, sameGstSlab, sameTotal, sameItems].filter(Boolean).length;
+
+      return {
+        invoice,
+        sameCompany,
+        sameGstSlab,
+        sameTotal,
+        sameItems,
+        score,
+      };
+    })
+    .filter(
+      (match) =>
+        match.invoice?._id !== excludeInvoiceId &&
+        match.sameCompany &&
+        match.sameTotal &&
+        (match.sameItems || match.sameGstSlab)
+    )
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return new Date(right.invoice?.createdAt || 0) - new Date(left.invoice?.createdAt || 0);
+    });
+}
+
 function buildInvoiceMarkup({
   invoiceNumber,
   customerName,
@@ -372,6 +464,15 @@ export default function Invoice() {
   const isEditingInvoice = Boolean(editingInvoiceId);
   const previewBranding = normalizeBranding(branding);
   const loggedInCustomerSnapshot = createCustomerSnapshot(loggedInUser);
+  const duplicateMatches = isEditingInvoice
+    ? []
+    : findPotentialDuplicateInvoices({
+        historyInvoices,
+        companyName,
+        lineItems,
+        gstRate,
+        grandTotal,
+      });
   const redirectToLogin = () => {
     clearAuthSession();
     navigate("/login");
@@ -807,6 +908,33 @@ export default function Invoice() {
     }
 
     const editingMode = isEditingInvoice;
+    const activeDuplicateMatches = editingMode
+      ? []
+      : findPotentialDuplicateInvoices({
+          historyInvoices,
+          companyName,
+          lineItems,
+          gstRate,
+          grandTotal,
+        });
+
+    if (activeDuplicateMatches.length > 0) {
+      const duplicateSummary = activeDuplicateMatches
+        .slice(0, 3)
+        .map(
+          (match) =>
+            `${match.invoice.invoiceNumber} | ${formatDateTime(match.invoice.createdAt)} | ${formatCurrency(match.invoice.totalPrice)}`
+        )
+        .join("\n");
+
+      if (
+        !window.confirm(
+          `Potential duplicate invoice found for ${companyName.trim()}.\n\n${duplicateSummary}\n\nSave this invoice anyway?`
+        )
+      ) {
+        return;
+      }
+    }
 
     setSaveLoading(true);
 
@@ -967,6 +1095,52 @@ export default function Invoice() {
               >
                 Cancel Edit
               </button>
+            </div>
+          ) : null}
+
+          {!isEditingInvoice && duplicateMatches.length > 0 ? (
+            <div className="duplicate-warning-panel">
+              <div className="duplicate-warning-header">
+                <div>
+                  <h4>Duplicate Invoice Warning</h4>
+                  <small>
+                    This draft looks similar to {duplicateMatches.length} saved invoice
+                    {duplicateMatches.length === 1 ? "" : "s"} for this customer.
+                  </small>
+                </div>
+              </div>
+
+              <div className="duplicate-warning-list">
+                {duplicateMatches.slice(0, 3).map((match) => (
+                  <div key={match.invoice._id} className="duplicate-warning-card">
+                    <div className="duplicate-warning-copy">
+                      <strong>{match.invoice.invoiceNumber}</strong>
+                      <small>
+                        {formatDateTime(match.invoice.createdAt)} •{" "}
+                        {formatCurrency(match.invoice.totalPrice)}
+                      </small>
+                      <span>{describeDuplicateMatch(match)}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        setSelectedHistoryInvoice(match.invoice);
+                        setActiveView("history");
+                      }}
+                    >
+                      Review Match
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {duplicateMatches.length > 3 ? (
+                <small className="duplicate-warning-more">
+                  {duplicateMatches.length - 3} more matching invoices found in history.
+                </small>
+              ) : null}
             </div>
           ) : null}
 

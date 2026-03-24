@@ -613,6 +613,56 @@ button:disabled {
   margin: 0 0 6px;
 }
 
+.duplicate-warning-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  border-left: 4px solid #d97706;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.96) 0%, rgba(255, 251, 235, 0.92) 100%);
+}
+
+.duplicate-warning-header h4 {
+  margin: 0 0 6px;
+  color: #9a3412;
+}
+
+.duplicate-warning-list {
+  display: grid;
+  gap: 12px;
+}
+
+.duplicate-warning-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(217, 119, 6, 0.18);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.duplicate-warning-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.duplicate-warning-copy strong {
+  color: #7c2d12;
+}
+
+.duplicate-warning-copy small,
+.duplicate-warning-copy span,
+.duplicate-warning-more {
+  color: #9a3412;
+  overflow-wrap: anywhere;
+}
+
 .receipt-import-panel {
   background: linear-gradient(135deg, var(--bg) 0%, rgba(44,122,123,0.03) 100%);
   border: 1px solid var(--border);
@@ -1331,6 +1381,7 @@ button:disabled {
   .button-group,
   .btn-row,
   .editor-mode-banner,
+  .duplicate-warning-card,
   .receipt-import-actions {
     flex-direction: column;
     align-items: stretch;
