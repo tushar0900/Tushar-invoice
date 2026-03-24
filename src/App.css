@@ -768,6 +768,65 @@ button:focus {
   resize: vertical;
 }
 
+.branding-color-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.branding-color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff 0%, rgba(15,23,42,0.02) 100%);
+}
+
+.branding-color-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+}
+
+.branding-color-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.branding-color-input input[type="color"] {
+  width: 56px;
+  min-width: 56px;
+  height: 42px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.branding-color-input code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.branding-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .invoice-preview {
   padding: 20px;
   background-color: #fff;
@@ -1226,6 +1285,7 @@ button:focus {
   .details-grid,
   .branding-template-grid,
   .branding-fields-grid,
+  .branding-color-grid,
   .invoice-summary-grid,
   .invoice-totals-grid {
     grid-template-columns: 1fr;
@@ -1271,6 +1331,14 @@ button:focus {
 
   .branding-panel {
     padding: 18px;
+  }
+
+  .branding-actions {
+    justify-content: stretch;
+  }
+
+  .branding-actions button {
+    width: 100%;
   }
 
   .fetch-btn,

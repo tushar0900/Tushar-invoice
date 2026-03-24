@@ -5,9 +5,11 @@ import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
 import { clearAuthSession, setAuthUser } from "./authStorage";
 import {
+  BRANDING_COLOR_CONTROLS,
   BRANDING_TEMPLATES,
   getBrandingCssVars,
   getBrandingTemplate,
+  getTemplateColorDefaults,
   getStoredBranding,
   normalizeBranding,
   persistBranding,
@@ -89,6 +91,9 @@ function buildInvoiceMarkup({
   const invoiceGstAmount = (invoiceSubtotal * Number(gstSlab)) / 100;
   const normalizedBranding = normalizeBranding(branding);
   const template = getBrandingTemplate(normalizedBranding.templateKey);
+  const brandingCssVars = getBrandingCssVars(normalizedBranding);
+  const bannerBackground = brandingCssVars["--brand-banner"];
+  const chipBackground = brandingCssVars["--brand-chip-bg"];
   const createdAtMarkup = createdAt
     ? `
           <div style="display:flex;flex-direction:column;gap:4px;">
@@ -103,13 +108,13 @@ function buildInvoiceMarkup({
 
   return `
     <div style="padding:20px;background:#fff;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-      <div style="margin-bottom:24px;padding:22px;border:1px solid ${template.border};border-radius:18px;background:${template.banner};">
+      <div style="margin-bottom:24px;padding:22px;border:1px solid ${normalizedBranding.border};border-radius:18px;background:${bannerBackground};">
         <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;">
           <div style="flex:1 1 auto;min-width:0;">
-            <span style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:999px;background:${template.chipBackground};color:${template.chipText};font-size:12px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">
+            <span style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:999px;background:${chipBackground};color:${normalizedBranding.accentStrong};font-size:12px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">
               ${escapeHtml(template.name)}
             </span>
-            <h1 style="margin:16px 0 10px;font-size:30px;font-weight:700;color:${template.accentStrong};">
+            <h1 style="margin:16px 0 10px;font-size:30px;font-weight:700;color:${normalizedBranding.accentStrong};">
               ${escapeHtml(normalizedBranding.brandLabel)}
             </h1>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#425466;">
@@ -129,8 +134,8 @@ function buildInvoiceMarkup({
           </div>
         </div>
       </div>
-      <div style="border:1px solid ${template.border};border-left:4px solid ${template.accent};border-radius:14px;padding:18px;margin-bottom:20px;background:${template.background};">
-        <h4 style="margin:0 0 14px;color:${template.accentStrong};text-transform:uppercase;font-size:16px;">Customer Information</h4>
+      <div style="border:1px solid ${normalizedBranding.border};border-left:4px solid ${normalizedBranding.accent};border-radius:14px;padding:18px;margin-bottom:20px;background:${normalizedBranding.background};">
+        <h4 style="margin:0 0 14px;color:${normalizedBranding.accentStrong};text-transform:uppercase;font-size:16px;">Customer Information</h4>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div><strong>Name:</strong><br />${escapeHtml(customerName || "-")}</div>
           <div><strong>Company Name:</strong><br />${escapeHtml(companyName || "-")}</div>
@@ -142,10 +147,10 @@ function buildInvoiceMarkup({
       <table style="width:100%;border-collapse:collapse;margin:20px 0;">
         <thead>
           <tr>
-            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Product</th>
-            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Rate</th>
-            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Quantity</th>
-            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Total</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${normalizedBranding.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Product</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${normalizedBranding.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Rate</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${normalizedBranding.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Quantity</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${normalizedBranding.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -153,37 +158,37 @@ function buildInvoiceMarkup({
             .map(
               (item) => `
                 <tr>
-                  <td style="padding:12px 10px;border-bottom:1px solid ${template.border};">${escapeHtml(item.product || "-")}</td>
-                  <td style="padding:12px 10px;border-bottom:1px solid ${template.border};">${formatCurrency(item.rate)}</td>
-                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.quantity}</td>
-                  <td style="padding:12px 10px;border-bottom:1px solid ${template.border};">${formatCurrency(item.total)}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};">${escapeHtml(item.product || "-")}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};">${formatCurrency(item.rate)}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};">${item.quantity}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};">${formatCurrency(item.total)}</td>
                 </tr>
               `
             )
             .join("")}
           <tr>
             <td colspan="2"></td>
-            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">Subtotal:</td>
-            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">${formatCurrency(invoiceSubtotal)}</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};font-weight:700;">Subtotal:</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};font-weight:700;">${formatCurrency(invoiceSubtotal)}</td>
           </tr>
           <tr>
             <td colspan="2"></td>
-            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">GST (${gstSlab}%):</td>
-            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">${formatCurrency(invoiceGstAmount)}</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};font-weight:700;">GST (${gstSlab}%):</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};font-weight:700;">${formatCurrency(invoiceGstAmount)}</td>
           </tr>
           <tr>
             <td colspan="2"></td>
-            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;background:${template.background};color:${template.accentStrong};">Grand Total:</td>
-            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;background:${template.background};color:${template.accentStrong};">${formatCurrency(totalPrice)}</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};font-weight:700;background:${normalizedBranding.background};color:${normalizedBranding.accentStrong};">Grand Total:</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${normalizedBranding.border};font-weight:700;background:${normalizedBranding.background};color:${normalizedBranding.accentStrong};">${formatCurrency(totalPrice)}</td>
           </tr>
         </tbody>
       </table>
-      <div style="border:1px solid ${template.border};border-radius:14px;padding:18px;background:${template.background};">
+      <div style="border:1px solid ${normalizedBranding.border};border-radius:14px;padding:18px;background:${normalizedBranding.background};">
         <strong style="display:block;margin-bottom:10px;">Amount in words</strong>
         <div>${escapeHtml(numberToWords(Number(totalPrice)))}</div>
       </div>
-      <div style="margin-top:18px;padding:18px;border-radius:14px;background:#fff;border:1px dashed ${template.border};">
-        <strong style="display:block;margin-bottom:10px;color:${template.accentStrong};">Footer note</strong>
+      <div style="margin-top:18px;padding:18px;border-radius:14px;background:#fff;border:1px dashed ${normalizedBranding.border};">
+        <strong style="display:block;margin-bottom:10px;color:${normalizedBranding.accentStrong};">Footer note</strong>
         <div style="line-height:1.6;color:#425466;">${escapeHtml(normalizedBranding.footerNote)}</div>
       </div>
     </div>
@@ -716,6 +721,25 @@ export default function Invoice() {
     }));
   };
 
+  const selectBrandingTemplate = (templateKey) => {
+    const templateColors = getTemplateColorDefaults(templateKey);
+
+    setBranding((currentBranding) => ({
+      ...currentBranding,
+      templateKey,
+      ...templateColors,
+    }));
+  };
+
+  const resetBrandingColors = () => {
+    const templateColors = getTemplateColorDefaults(previewBranding.templateKey);
+
+    setBranding((currentBranding) => ({
+      ...currentBranding,
+      ...templateColors,
+    }));
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
 
@@ -968,10 +992,10 @@ export default function Invoice() {
                   className={`branding-template-card ${
                     previewBranding.templateKey === template.key ? "active" : ""
                   }`}
-                  onClick={() => updateBrandingField("templateKey", template.key)}
+                  onClick={() => selectBrandingTemplate(template.key)}
                   style={{
                     "--template-accent": template.accent,
-                    "--template-banner": template.banner,
+                    "--template-banner": `linear-gradient(135deg, ${template.bannerStart} 0%, ${template.bannerEnd} 100%)`,
                   }}
                 >
                   <span className="branding-template-swatch" />
@@ -1016,6 +1040,37 @@ export default function Invoice() {
                   rows={3}
                 />
               </div>
+            </div>
+
+            <div className="branding-panel-copy">
+              <h4>Template Colors</h4>
+              <small>
+                Fine-tune the selected template colors for this invoice preview and any invoices
+                you save from here.
+              </small>
+            </div>
+
+            <div className="branding-color-grid">
+              {BRANDING_COLOR_CONTROLS.map((control) => (
+                <label key={control.key} className="branding-color-field">
+                  <span className="branding-color-label">{control.label}</span>
+                  <small>{control.description}</small>
+                  <div className="branding-color-input">
+                    <input
+                      type="color"
+                      value={previewBranding[control.key]}
+                      onChange={(e) => updateBrandingField(control.key, e.target.value)}
+                    />
+                    <code>{previewBranding[control.key]}</code>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="branding-actions">
+              <button type="button" className="secondary-btn" onClick={resetBrandingColors}>
+                Reset Colors to {getBrandingTemplate(previewBranding.templateKey).name}
+              </button>
             </div>
           </div>
 

@@ -6,11 +6,38 @@ const router = express.Router();
 const invoiceCustomerSelection = "name mobileNumber address gstNumber";
 const allowedGstSlabs = new Set([5, 12, 18, 28]);
 const allowedBrandingTemplates = new Set(["professional", "retail", "studio"]);
+const brandingTemplateColors = {
+  professional: {
+    accent: "#2C7A7B",
+    accentStrong: "#225E60",
+    background: "#F5FBFB",
+    border: "#D8E9E9",
+    bannerStart: "#EDF9F8",
+    bannerEnd: "#D9ECEB",
+  },
+  retail: {
+    accent: "#D97706",
+    accentStrong: "#B45309",
+    background: "#FFF8EF",
+    border: "#F4DFC1",
+    bannerStart: "#FFF1DB",
+    bannerEnd: "#FFE0B2",
+  },
+  studio: {
+    accent: "#C2415C",
+    accentStrong: "#9F1239",
+    background: "#FFF5F7",
+    border: "#F7D8E0",
+    bannerStart: "#FFE6ED",
+    bannerEnd: "#F8D7E1",
+  },
+};
 const defaultBranding = {
   templateKey: "professional",
   brandLabel: "GST Tax Invoice",
   headerNote: "Clear billing with a branded customer-ready layout.",
   footerNote: "Thank you for your business. This invoice is computer generated.",
+  ...brandingTemplateColors.professional,
 };
 
 router.use(requireAuth);
@@ -33,6 +60,11 @@ function normalizeBrandingText(value) {
   return String(value || "")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function normalizeHexColor(value, fallback) {
+  const normalizedValue = String(value || "").trim().toUpperCase();
+  return /^#[0-9A-F]{6}$/.test(normalizedValue) ? normalizedValue : fallback;
 }
 
 function normalizeLineItems(lineItems) {
@@ -95,6 +127,8 @@ function normalizeBranding(brandingInput) {
     throw new Error("Unsupported branding template selected.");
   }
 
+  const templateColors = brandingTemplateColors[templateKey] || brandingTemplateColors.professional;
+
   if (!brandLabel || brandLabel.length > 60) {
     throw new Error("Brand label must be between 1 and 60 characters.");
   }
@@ -112,6 +146,12 @@ function normalizeBranding(brandingInput) {
     brandLabel,
     headerNote: headerNote || defaultBranding.headerNote,
     footerNote: footerNote || defaultBranding.footerNote,
+    accent: normalizeHexColor(brandingInput.accent, templateColors.accent),
+    accentStrong: normalizeHexColor(brandingInput.accentStrong, templateColors.accentStrong),
+    background: normalizeHexColor(brandingInput.background, templateColors.background),
+    border: normalizeHexColor(brandingInput.border, templateColors.border),
+    bannerStart: normalizeHexColor(brandingInput.bannerStart, templateColors.bannerStart),
+    bannerEnd: normalizeHexColor(brandingInput.bannerEnd, templateColors.bannerEnd),
   };
 }
 
