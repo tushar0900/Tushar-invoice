@@ -4,6 +4,14 @@ import axios from "axios";
 import html2pdf from "html2pdf.js";
 import API_BASE_URL from "./api";
 import { clearAuthSession, setAuthUser } from "./authStorage";
+import {
+  BRANDING_TEMPLATES,
+  getBrandingCssVars,
+  getBrandingTemplate,
+  getStoredBranding,
+  normalizeBranding,
+  persistBranding,
+} from "./invoiceBranding";
 import { extractReceiptDraftFromText } from "./receiptParser";
 import "./App.css";
 
@@ -40,47 +48,104 @@ function formatOcrStatus(status, progress) {
   return `${label} ${Math.round(progress * 100)}%`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatCurrency(value) {
+  return `Rs. ${Number(value || 0).toFixed(2)}`;
+}
+
+function normalizeInvoiceRecord(invoice) {
+  if (!invoice) {
+    return invoice;
+  }
+
+  return {
+    ...invoice,
+    branding: normalizeBranding(invoice.branding),
+  };
+}
+
 function buildInvoiceMarkup({
   invoiceNumber,
   customerName,
   companyName,
   address,
   gstNumber,
+  mobileNumber,
   lineItems,
   gstSlab,
   totalPrice,
+  branding,
+  createdAt,
 }) {
   const invoiceSubtotal = lineItems.reduce((sum, item) => sum + Number(item.total), 0);
   const invoiceGstAmount = (invoiceSubtotal * Number(gstSlab)) / 100;
+  const normalizedBranding = normalizeBranding(branding);
+  const template = getBrandingTemplate(normalizedBranding.templateKey);
+  const createdAtMarkup = createdAt
+    ? `
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-size:11px;color:#5b6166;text-transform:uppercase;letter-spacing:0.45px;">Created On</span>
+            <strong style="font-size:14px;color:#222;">${escapeHtml(formatDateTime(createdAt))}</strong>
+          </div>
+        `
+    : "";
+  const mobileMarkup = mobileNumber
+    ? `<div><strong>Mobile Number:</strong><br />${escapeHtml(mobileNumber)}</div>`
+    : "";
 
   return `
     <div style="padding:20px;background:#fff;color:#222;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-      <div style="text-align:center;margin-bottom:30px;">
-        <h1 style="margin:0 0 10px;font-size:28px;font-weight:700;">INVOICE</h1>
-        <p style="margin:0;font-size:14px;color:#666;">
-          Invoice #: <strong>${invoiceNumber}</strong>
-        </p>
+      <div style="margin-bottom:24px;padding:22px;border:1px solid ${template.border};border-radius:18px;background:${template.banner};">
+        <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;">
+          <div style="flex:1 1 auto;min-width:0;">
+            <span style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:999px;background:${template.chipBackground};color:${template.chipText};font-size:12px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">
+              ${escapeHtml(template.name)}
+            </span>
+            <h1 style="margin:16px 0 10px;font-size:30px;font-weight:700;color:${template.accentStrong};">
+              ${escapeHtml(normalizedBranding.brandLabel)}
+            </h1>
+            <p style="margin:0;font-size:14px;line-height:1.6;color:#425466;">
+              ${escapeHtml(normalizedBranding.headerNote)}
+            </p>
+          </div>
+          <div style="width:220px;max-width:100%;padding:16px;border-radius:14px;background:#fff;border:1px solid rgba(255,255,255,0.45);box-shadow:0 8px 24px rgba(15,23,42,0.08);display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <span style="font-size:11px;color:#5b6166;text-transform:uppercase;letter-spacing:0.45px;">Invoice Number</span>
+              <strong style="font-size:16px;color:#222;">${escapeHtml(invoiceNumber)}</strong>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <span style="font-size:11px;color:#5b6166;text-transform:uppercase;letter-spacing:0.45px;">Company</span>
+              <strong style="font-size:14px;color:#222;">${escapeHtml(companyName || "-")}</strong>
+            </div>
+            ${createdAtMarkup}
+          </div>
+        </div>
       </div>
-      <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;">
-        <strong style="min-width:140px;">Invoice Number:</strong>
-        <span>${invoiceNumber}</span>
-      </div>
-      <div style="border:1px solid #e6eaec;border-left:4px solid #2c7a7b;border-radius:10px;padding:18px;margin-bottom:20px;background:#f7f8f9;">
-        <h4 style="margin:0 0 14px;color:#225e60;text-transform:uppercase;font-size:16px;">Customer Information</h4>
+      <div style="border:1px solid ${template.border};border-left:4px solid ${template.accent};border-radius:14px;padding:18px;margin-bottom:20px;background:${template.background};">
+        <h4 style="margin:0 0 14px;color:${template.accentStrong};text-transform:uppercase;font-size:16px;">Customer Information</h4>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-          <div><strong>Name:</strong><br />${customerName || "-"}</div>
-          <div><strong>Company Name:</strong><br />${companyName || "-"}</div>
-          <div><strong>Address:</strong><br />${address || "-"}</div>
-          <div><strong>GST Number:</strong><br />${gstNumber || "-"}</div>
+          <div><strong>Name:</strong><br />${escapeHtml(customerName || "-")}</div>
+          <div><strong>Company Name:</strong><br />${escapeHtml(companyName || "-")}</div>
+          <div><strong>Address:</strong><br />${escapeHtml(address || "-")}</div>
+          <div><strong>GST Number:</strong><br />${escapeHtml(gstNumber || "-")}</div>
+          ${mobileMarkup}
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse;margin:20px 0;">
         <thead>
           <tr>
-            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Product</th>
-            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Rate</th>
-            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Quantity</th>
-            <th style="padding:12px 10px;border-bottom:2px solid #e6eaec;text-align:left;">Total</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Product</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Rate</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Quantity</th>
+            <th style="padding:12px 10px;border-bottom:2px solid ${template.border};text-align:left;color:#5b6166;text-transform:uppercase;font-size:12px;letter-spacing:0.35px;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -88,37 +153,166 @@ function buildInvoiceMarkup({
             .map(
               (item) => `
                 <tr>
-                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.product}</td>
-                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.rate).toFixed(2)}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${template.border};">${escapeHtml(item.product || "-")}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${template.border};">${formatCurrency(item.rate)}</td>
                   <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">${item.quantity}</td>
-                  <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;">Rs. ${Number(item.total).toFixed(2)}</td>
+                  <td style="padding:12px 10px;border-bottom:1px solid ${template.border};">${formatCurrency(item.total)}</td>
                 </tr>
               `
             )
             .join("")}
           <tr>
             <td colspan="2"></td>
-            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Subtotal:</td>
-            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceSubtotal.toFixed(2)}</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">Subtotal:</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">${formatCurrency(invoiceSubtotal)}</td>
           </tr>
           <tr>
             <td colspan="2"></td>
-            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">GST (${gstSlab}%):</td>
-            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;">Rs. ${invoiceGstAmount.toFixed(2)}</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">GST (${gstSlab}%):</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;">${formatCurrency(invoiceGstAmount)}</td>
           </tr>
           <tr>
             <td colspan="2"></td>
-            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Grand Total:</td>
-            <td style="padding:12px 10px;border-bottom:1px solid #e6eaec;font-weight:700;background:#f0f0f0;">Rs. ${Number(totalPrice).toFixed(2)}</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;background:${template.background};color:${template.accentStrong};">Grand Total:</td>
+            <td style="padding:12px 10px;border-bottom:1px solid ${template.border};font-weight:700;background:${template.background};color:${template.accentStrong};">${formatCurrency(totalPrice)}</td>
           </tr>
         </tbody>
       </table>
-      <div style="border:1px solid #e6eaec;border-radius:10px;padding:18px;background:#f7f8f9;">
+      <div style="border:1px solid ${template.border};border-radius:14px;padding:18px;background:${template.background};">
         <strong style="display:block;margin-bottom:10px;">Amount in words</strong>
-        <div>${numberToWords(Number(totalPrice))}</div>
+        <div>${escapeHtml(numberToWords(Number(totalPrice)))}</div>
+      </div>
+      <div style="margin-top:18px;padding:18px;border-radius:14px;background:#fff;border:1px dashed ${template.border};">
+        <strong style="display:block;margin-bottom:10px;color:${template.accentStrong};">Footer note</strong>
+        <div style="line-height:1.6;color:#425466;">${escapeHtml(normalizedBranding.footerNote)}</div>
       </div>
     </div>
   `;
+}
+
+function InvoiceDocumentPreview({
+  invoiceNumber,
+  customerName,
+  companyName,
+  address,
+  gstNumber,
+  mobileNumber,
+  lineItems,
+  gstSlab,
+  totalPrice,
+  branding,
+  createdAt,
+}) {
+  const normalizedBranding = normalizeBranding(branding);
+  const activeTemplate = getBrandingTemplate(normalizedBranding.templateKey);
+  const invoiceSubtotal = lineItems.reduce((sum, item) => sum + Number(item.total), 0);
+  const invoiceGstAmount = (invoiceSubtotal * Number(gstSlab)) / 100;
+
+  return (
+    <div className="invoice-preview branded-invoice-preview" style={getBrandingCssVars(normalizedBranding)}>
+      <div className="invoice-brand-banner">
+        <div className="invoice-brand-copy">
+          <span className="invoice-template-chip">{activeTemplate.name}</span>
+          <h1>{normalizedBranding.brandLabel}</h1>
+          <p>{normalizedBranding.headerNote}</p>
+        </div>
+
+        <div className="invoice-brand-meta-card">
+          <div className="invoice-brand-meta-item">
+            <label>Invoice Number</label>
+            <strong>{invoiceNumber || "-"}</strong>
+          </div>
+          <div className="invoice-brand-meta-item">
+            <label>Company</label>
+            <strong>{companyName || "-"}</strong>
+          </div>
+          {createdAt ? (
+            <div className="invoice-brand-meta-item">
+              <label>Created On</label>
+              <strong>{formatDateTime(createdAt)}</strong>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="customer-details-box">
+        <h4>Customer Information</h4>
+        <div className="details-grid">
+          <div className="detail-item">
+            <label>Name:</label>
+            <span>{customerName || "-"}</span>
+          </div>
+          <div className="detail-item">
+            <label>Company Name:</label>
+            <span>{companyName || "-"}</span>
+          </div>
+          <div className="detail-item">
+            <label>Address:</label>
+            <span>{address || "-"}</span>
+          </div>
+          <div className="detail-item">
+            <label>GST Number:</label>
+            <span>{gstNumber || "-"}</span>
+          </div>
+          {mobileNumber ? (
+            <div className="detail-item">
+              <label>Mobile Number:</label>
+              <span>{mobileNumber}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="table-shell table-shell-preview">
+        <table className="invoice-table invoice-preview-table responsive-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Rate</th>
+              <th>Quantity</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {lineItems.map((item, index) => (
+              <tr key={`${item.product}-${index}`}>
+                <td data-label="Product">{item.product || "-"}</td>
+                <td data-label="Rate">{formatCurrency(item.rate)}</td>
+                <td data-label="Quantity">{item.quantity}</td>
+                <td data-label="Total">{formatCurrency(item.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="invoice-totals-grid">
+        <div className="totals-card">
+          <label>Subtotal</label>
+          <strong>{formatCurrency(invoiceSubtotal)}</strong>
+        </div>
+        <div className="totals-card">
+          <label>GST ({gstSlab}%)</label>
+          <strong>{formatCurrency(invoiceGstAmount)}</strong>
+        </div>
+        <div className="totals-card totals-card-emphasis">
+          <label>Grand Total</label>
+          <strong>{formatCurrency(totalPrice)}</strong>
+        </div>
+      </div>
+
+      <div className="amount-words">
+        <label>Amount in words:</label>
+        <p className="amount-words-copy">{numberToWords(totalPrice)}</p>
+      </div>
+
+      <div className="invoice-brand-footer">
+        <label>Footer Note</label>
+        <p>{normalizedBranding.footerNote}</p>
+      </div>
+    </div>
+  );
 }
 
 export default function Invoice() {
@@ -133,6 +327,7 @@ export default function Invoice() {
   const [gstNo, setGstNo] = useState("");
   const [lineItems, setLineItems] = useState(createInitialLineItems);
   const [gstRate, setGstRate] = useState(5);
+  const [branding, setBranding] = useState(getStoredBranding);
   const [activeView, setActiveView] = useState("create");
   const [historyInvoices, setHistoryInvoices] = useState([]);
   const [selectedHistoryInvoice, setSelectedHistoryInvoice] = useState(null);
@@ -147,6 +342,7 @@ export default function Invoice() {
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
   const grandTotal = subtotal + gstAmount;
+  const previewBranding = normalizeBranding(branding);
   const redirectToLogin = () => {
     clearAuthSession();
     navigate("/login");
@@ -189,6 +385,10 @@ export default function Invoice() {
   }, []);
 
   useEffect(() => {
+    persistBranding(branding);
+  }, [branding]);
+
+  useEffect(() => {
     let isActive = true;
 
     const hydrateLoggedInUser = async () => {
@@ -223,19 +423,19 @@ export default function Invoice() {
 
       try {
         const response = await axios.get(`${API_BASE_URL}/api/invoices/me`);
-        setHistoryInvoices(response.data);
+        const nextInvoices = response.data.map(normalizeInvoiceRecord);
+        setHistoryInvoices(nextInvoices);
         setSelectedHistoryInvoice((currentSelection) => {
-          if (!response.data.length) {
+          if (!nextInvoices.length) {
             return null;
           }
 
           if (!currentSelection) {
-            return response.data[0];
+            return nextInvoices[0];
           }
 
           return (
-            response.data.find((invoice) => invoice._id === currentSelection._id) ||
-            response.data[0]
+            nextInvoices.find((invoice) => invoice._id === currentSelection._id) || nextInvoices[0]
           );
         });
       } catch (error) {
@@ -318,20 +518,18 @@ export default function Invoice() {
 
     try {
       const response = await axios.get(`${API_BASE_URL}/api/invoices/me`);
-      setHistoryInvoices(response.data);
+      const nextInvoices = response.data.map(normalizeInvoiceRecord);
+      setHistoryInvoices(nextInvoices);
       setSelectedHistoryInvoice((currentSelection) => {
-        if (!response.data.length) {
+        if (!nextInvoices.length) {
           return null;
         }
 
         if (!currentSelection) {
-          return response.data[0];
+          return nextInvoices[0];
         }
 
-        return (
-          response.data.find((invoice) => invoice._id === currentSelection._id) ||
-          response.data[0]
-        );
+        return nextInvoices.find((invoice) => invoice._id === currentSelection._id) || nextInvoices[0];
       });
     } catch (error) {
       if (error.response?.status === 401) {
@@ -388,9 +586,12 @@ export default function Invoice() {
       companyName: invoice.companyName || "-",
       address: invoiceCustomer.address || address,
       gstNumber: invoiceCustomer.gstNumber || gstNo,
+      mobileNumber: invoiceCustomer.mobileNumber || mobile,
       lineItems: invoice.lineItems,
       gstSlab: invoice.gstSlab,
       totalPrice: invoice.totalPrice,
+      branding: invoice.branding,
+      createdAt: invoice.createdAt,
     });
   };
 
@@ -508,6 +709,13 @@ export default function Invoice() {
     }
   };
 
+  const updateBrandingField = (field, value) => {
+    setBranding((currentBranding) => ({
+      ...currentBranding,
+      [field]: value,
+    }));
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
 
@@ -532,9 +740,10 @@ export default function Invoice() {
         lineItems,
         gstSlab: gstRate,
         totalPrice: grandTotal,
+        branding: previewBranding,
       });
 
-      const savedInvoice = {
+      const savedInvoice = normalizeInvoiceRecord({
         ...response.data,
         companyName: response.data.companyName || companyName.trim(),
         customerId: {
@@ -544,7 +753,7 @@ export default function Invoice() {
           address: loggedInUser.address,
           gstNumber: loggedInUser.gstNumber,
         },
-      };
+      });
 
       setHistoryInvoices((currentInvoices) => [savedInvoice, ...currentInvoices]);
       setSelectedHistoryInvoice(savedInvoice);
@@ -584,9 +793,11 @@ export default function Invoice() {
       companyName: companyName.trim(),
       address,
       gstNumber: gstNo,
+      mobileNumber: mobile,
       lineItems,
       gstSlab: gstRate,
       totalPrice: grandTotal,
+      branding: previewBranding,
     });
 
     const options = {
@@ -609,13 +820,6 @@ export default function Invoice() {
         navigate("/login");
       });
   };
-
-  const selectedHistorySubtotal = selectedHistoryInvoice
-    ? selectedHistoryInvoice.lineItems.reduce((sum, item) => sum + item.total, 0)
-    : 0;
-  const selectedHistoryGst = selectedHistoryInvoice
-    ? (selectedHistorySubtotal * selectedHistoryInvoice.gstSlab) / 100
-    : 0;
 
   return (
     <div className="annexure invoice-page">
@@ -747,85 +951,86 @@ export default function Invoice() {
             </div>
           </div>
 
-          <div className="invoice-preview">
-            <div className="invoice-preview-header">
-              <h1>INVOICE</h1>
-              <p>
-                Invoice #: <strong>{invoiceNo}</strong>
-              </p>
+          <div className="branding-panel">
+            <div className="branding-panel-copy">
+              <h4>Branding Template</h4>
+              <small>
+                Pick a reusable visual style and adjust the brand copy shown in the header and
+                footer of every invoice.
+              </small>
             </div>
 
-            <div className="row single">
-              <label>Invoice Number:</label>
-              <input value={invoiceNo} disabled />
+            <div className="branding-template-grid">
+              {BRANDING_TEMPLATES.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  className={`branding-template-card ${
+                    previewBranding.templateKey === template.key ? "active" : ""
+                  }`}
+                  onClick={() => updateBrandingField("templateKey", template.key)}
+                  style={{
+                    "--template-accent": template.accent,
+                    "--template-banner": template.banner,
+                  }}
+                >
+                  <span className="branding-template-swatch" />
+                  <strong>{template.name}</strong>
+                  <small>{template.description}</small>
+                </button>
+              ))}
             </div>
 
-            <div className="customer-details-box">
-              <h4>Customer Information</h4>
-              <div className="details-grid">
-                <div className="detail-item">
-                  <label>Name:</label>
-                  <span>{name}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Company Name:</label>
-                  <span>{companyName || "-"}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Address:</label>
-                  <span>{address}</span>
-                </div>
-                <div className="detail-item">
-                  <label>GST Number:</label>
-                  <span>{gstNo}</span>
-                </div>
+            <div className="branding-fields-grid">
+              <div className="summary-field">
+                <label htmlFor="brand-label">Brand Label</label>
+                <input
+                  id="brand-label"
+                  value={branding.brandLabel || ""}
+                  onChange={(e) => updateBrandingField("brandLabel", e.target.value)}
+                  placeholder="GST Tax Invoice"
+                  maxLength={60}
+                />
               </div>
-            </div>
 
-            <div className="table-shell table-shell-preview">
-              <table className="invoice-table invoice-preview-table responsive-table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Rate</th>
-                    <th>Quantity</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {lineItems.map((item, index) => (
-                    <tr key={`${item.product}-${index}`}>
-                      <td data-label="Product">{item.product || "-"}</td>
-                      <td data-label="Rate">Rs. {item.rate.toFixed(2)}</td>
-                      <td data-label="Quantity">{item.quantity}</td>
-                      <td data-label="Total">Rs. {item.total.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="invoice-totals-grid">
-              <div className="totals-card">
-                <label>Subtotal</label>
-                <strong>Rs. {subtotal.toFixed(2)}</strong>
+              <div className="summary-field">
+                <label htmlFor="brand-header-note">Header Note</label>
+                <textarea
+                  id="brand-header-note"
+                  value={branding.headerNote || ""}
+                  onChange={(e) => updateBrandingField("headerNote", e.target.value)}
+                  placeholder="Add a short line below the invoice title"
+                  maxLength={120}
+                  rows={3}
+                />
               </div>
-              <div className="totals-card">
-                <label>GST ({gstRate}%)</label>
-                <strong>Rs. {gstAmount.toFixed(2)}</strong>
-              </div>
-              <div className="totals-card totals-card-emphasis">
-                <label>Grand Total</label>
-                <strong>Rs. {grandTotal.toFixed(2)}</strong>
-              </div>
-            </div>
 
-            <div className="amount-words">
-              <label>Amount in words:</label>
-              <p className="amount-words-copy">{numberToWords(grandTotal)}</p>
+              <div className="summary-field branding-footer-field">
+                <label htmlFor="brand-footer-note">Footer Note</label>
+                <textarea
+                  id="brand-footer-note"
+                  value={branding.footerNote || ""}
+                  onChange={(e) => updateBrandingField("footerNote", e.target.value)}
+                  placeholder="Thank you for your business. This invoice is computer generated."
+                  maxLength={180}
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
+
+          <InvoiceDocumentPreview
+            invoiceNumber={invoiceNo}
+            customerName={name}
+            companyName={companyName}
+            address={address}
+            gstNumber={gstNo}
+            mobileNumber={mobile}
+            lineItems={lineItems}
+            gstSlab={gstRate}
+            totalPrice={grandTotal}
+            branding={previewBranding}
+          />
 
           <div className="table-shell table-shell-editor">
             <table className="invoice-table invoice-editor-table responsive-table">
@@ -965,10 +1170,15 @@ export default function Invoice() {
                   <tbody>
                     {historyInvoices.map((invoice) => (
                       <tr key={invoice._id}>
-                        <td data-label="Invoice">{invoice.invoiceNumber}</td>
+                        <td data-label="Invoice">
+                          <div className="history-invoice-copy">
+                            <strong>{invoice.invoiceNumber}</strong>
+                            <small>{getBrandingTemplate(invoice.branding?.templateKey).name}</small>
+                          </div>
+                        </td>
                         <td data-label="Date">{formatDateTime(invoice.createdAt)}</td>
                         <td data-label="Items">{invoice.lineItems.length}</td>
-                        <td data-label="Total">Rs. {Number(invoice.totalPrice).toFixed(2)}</td>
+                        <td data-label="Total">{formatCurrency(invoice.totalPrice)}</td>
                         <td data-label="Actions">
                           <div className="history-actions">
                             <button
@@ -997,75 +1207,19 @@ export default function Invoice() {
 
               {selectedHistoryInvoice ? (
                 <div className="history-detail">
-                  <div className="customer-details-box">
-                    <h4>Invoice Details</h4>
-                    <div className="details-grid">
-                      <div className="detail-item">
-                        <label>Invoice Number:</label>
-                        <span>{selectedHistoryInvoice.invoiceNumber}</span>
-                      </div>
-                      <div className="detail-item">
-                        <label>Created On:</label>
-                        <span>{formatDateTime(selectedHistoryInvoice.createdAt)}</span>
-                      </div>
-                      <div className="detail-item">
-                        <label>Customer Name:</label>
-                        <span>{selectedHistoryInvoice.customerId?.name || name}</span>
-                      </div>
-                      <div className="detail-item">
-                        <label>Company Name:</label>
-                        <span>{selectedHistoryInvoice.companyName || "-"}</span>
-                      </div>
-                      <div className="detail-item">
-                        <label>Mobile Number:</label>
-                        <span>{selectedHistoryInvoice.customerId?.mobileNumber || mobile}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="table-shell table-shell-detail">
-                    <table className="invoice-table invoice-detail-table responsive-table">
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Rate</th>
-                          <th>Quantity</th>
-                          <th>Total</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {selectedHistoryInvoice.lineItems.map((item, index) => (
-                          <tr key={`${item.product}-${index}`}>
-                            <td data-label="Product">{item.product || "-"}</td>
-                            <td data-label="Rate">Rs. {Number(item.rate).toFixed(2)}</td>
-                            <td data-label="Quantity">{item.quantity}</td>
-                            <td data-label="Total">Rs. {Number(item.total).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="invoice-totals-grid">
-                    <div className="totals-card">
-                      <label>Subtotal</label>
-                      <strong>Rs. {selectedHistorySubtotal.toFixed(2)}</strong>
-                    </div>
-                    <div className="totals-card">
-                      <label>GST ({selectedHistoryInvoice.gstSlab}%)</label>
-                      <strong>Rs. {selectedHistoryGst.toFixed(2)}</strong>
-                    </div>
-                    <div className="totals-card totals-card-emphasis">
-                      <label>Grand Total</label>
-                      <strong>Rs. {Number(selectedHistoryInvoice.totalPrice).toFixed(2)}</strong>
-                    </div>
-                  </div>
-
-                  <div className="amount-words">
-                    <label>Amount in words</label>
-                    <input value={numberToWords(Number(selectedHistoryInvoice.totalPrice))} disabled />
-                  </div>
+                  <InvoiceDocumentPreview
+                    invoiceNumber={selectedHistoryInvoice.invoiceNumber}
+                    customerName={selectedHistoryInvoice.customerId?.name || name}
+                    companyName={selectedHistoryInvoice.companyName}
+                    address={selectedHistoryInvoice.customerId?.address || address}
+                    gstNumber={selectedHistoryInvoice.customerId?.gstNumber || gstNo}
+                    mobileNumber={selectedHistoryInvoice.customerId?.mobileNumber || mobile}
+                    lineItems={selectedHistoryInvoice.lineItems}
+                    gstSlab={selectedHistoryInvoice.gstSlab}
+                    totalPrice={selectedHistoryInvoice.totalPrice}
+                    branding={selectedHistoryInvoice.branding}
+                    createdAt={selectedHistoryInvoice.createdAt}
+                  />
 
                   <div className="btn-row history-detail-actions">
                     <button

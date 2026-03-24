@@ -118,7 +118,8 @@ small { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .row input,
 input[type="text"],
 input[type="number"],
-select {
+select,
+textarea {
   flex: 1;
   width: 100%;
   max-width: 100%;
@@ -136,7 +137,8 @@ select {
 .row input:focus,
 input[type="text"]:focus,
 input[type="number"]:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(44,122,123,0.1);
   outline: none;
@@ -688,11 +690,196 @@ button:focus {
   outline: none;
 }
 
+.branding-panel {
+  background: linear-gradient(135deg, #fff 0%, rgba(44,122,123,0.03) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.branding-panel-copy h4 {
+  margin: 0 0 8px;
+}
+
+.branding-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.branding-template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 148px;
+  padding: 18px;
+  text-align: left;
+  color: #222;
+  border: 1.5px solid var(--border);
+  background: var(--template-banner, #fff);
+  box-shadow: 0 4px 14px rgba(15,23,42,0.05);
+}
+
+.branding-template-card:hover {
+  border-color: var(--template-accent, var(--accent));
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15,23,42,0.08);
+}
+
+.branding-template-card.active {
+  border-color: var(--template-accent, var(--accent));
+  outline: 2px solid var(--template-accent, var(--accent));
+  outline-offset: 1px;
+}
+
+.branding-template-card strong {
+  font-size: 16px;
+  color: #222;
+}
+
+.branding-template-card small {
+  color: #4b5563;
+}
+
+.branding-template-swatch {
+  width: 44px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--template-accent, var(--accent));
+  display: inline-block;
+}
+
+.branding-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.branding-footer-field {
+  grid-column: 1 / -1;
+}
+
+.branding-fields-grid textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
 .invoice-preview {
   padding: 20px;
   background-color: #fff;
   border: 1px solid var(--border);
   border-radius: 10px;
+}
+
+.invoice-brand-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--brand-banner, linear-gradient(135deg, var(--bg) 0%, rgba(44,122,123,0.04) 100%));
+  margin-bottom: 24px;
+}
+
+.invoice-brand-copy h1 {
+  margin: 16px 0 10px;
+  font-size: clamp(28px, 3vw, 34px);
+  color: var(--accent-strong);
+  letter-spacing: -0.6px;
+}
+
+.invoice-brand-copy p {
+  margin: 0;
+  max-width: 640px;
+  line-height: 1.6;
+  color: #425466;
+}
+
+.invoice-template-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--brand-chip-bg, rgba(34,94,96,0.1));
+  color: var(--brand-chip-text, var(--accent-strong));
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.invoice-brand-meta-card {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 8px 24px rgba(15,23,42,0.08);
+}
+
+.invoice-brand-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.invoice-brand-meta-item label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+}
+
+.invoice-brand-meta-item strong {
+  color: #222;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.invoice-brand-footer {
+  margin-top: 24px;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: #fff;
+}
+
+.invoice-brand-footer label {
+  display: block;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.invoice-brand-footer p {
+  margin: 0;
+  line-height: 1.6;
+  color: #425466;
+}
+
+.history-invoice-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-invoice-copy strong {
+  color: #222;
+}
+
+.history-invoice-copy small {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .invoice-preview-header {
@@ -999,6 +1186,10 @@ button:focus {
   .annexure {
     max-width: 100%;
   }
+
+  .branding-template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -1033,6 +1224,8 @@ button:focus {
   }
 
   .details-grid,
+  .branding-template-grid,
+  .branding-fields-grid,
   .invoice-summary-grid,
   .invoice-totals-grid {
     grid-template-columns: 1fr;
@@ -1076,6 +1269,10 @@ button:focus {
     font-size: 12px;
   }
 
+  .branding-panel {
+    padding: 18px;
+  }
+
   .fetch-btn,
   .clear-btn {
     margin-left: 0;
@@ -1086,6 +1283,10 @@ button:focus {
 @media (max-width: 860px) {
   .invoice-summary-grid,
   .invoice-totals-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-brand-banner {
     grid-template-columns: 1fr;
   }
 
@@ -1194,6 +1395,10 @@ button:focus {
 
   .invoice-preview-header h1 {
     font-size: 24px;
+  }
+
+  .invoice-brand-copy h1 {
+    font-size: 26px;
   }
 }
 

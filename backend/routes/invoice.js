@@ -5,6 +5,13 @@ import { requireAuth } from "../middleware/requireAuth.js";
 const router = express.Router();
 const invoiceCustomerSelection = "name mobileNumber address gstNumber";
 const allowedGstSlabs = new Set([5, 12, 18, 28]);
+const allowedBrandingTemplates = new Set(["professional", "retail", "studio"]);
+const defaultBranding = {
+  templateKey: "professional",
+  brandLabel: "GST Tax Invoice",
+  headerNote: "Clear billing with a branded customer-ready layout.",
+  footerNote: "Thank you for your business. This invoice is computer generated.",
+};
 
 router.use(requireAuth);
 
@@ -17,6 +24,12 @@ function normalizeInvoiceNumber(value) {
 }
 
 function normalizeCompanyName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeBrandingText(value) {
   return String(value || "")
     .trim()
     .replace(/\s+/g, " ");
@@ -63,6 +76,42 @@ function calculateInvoiceTotals(lineItems, gstSlab) {
     subtotal,
     gstAmount,
     totalPrice: roundCurrency(subtotal + gstAmount),
+  };
+}
+
+function normalizeBranding(brandingInput) {
+  if (brandingInput == null || typeof brandingInput !== "object") {
+    return { ...defaultBranding };
+  }
+
+  const templateKey = String(brandingInput.templateKey || defaultBranding.templateKey)
+    .trim()
+    .toLowerCase();
+  const brandLabel = normalizeBrandingText(brandingInput.brandLabel || defaultBranding.brandLabel);
+  const headerNote = normalizeBrandingText(brandingInput.headerNote);
+  const footerNote = normalizeBrandingText(brandingInput.footerNote);
+
+  if (!allowedBrandingTemplates.has(templateKey)) {
+    throw new Error("Unsupported branding template selected.");
+  }
+
+  if (!brandLabel || brandLabel.length > 60) {
+    throw new Error("Brand label must be between 1 and 60 characters.");
+  }
+
+  if (headerNote.length > 120) {
+    throw new Error("Header note must be 120 characters or fewer.");
+  }
+
+  if (footerNote.length > 180) {
+    throw new Error("Footer note must be 180 characters or fewer.");
+  }
+
+  return {
+    templateKey,
+    brandLabel,
+    headerNote: headerNote || defaultBranding.headerNote,
+    footerNote: footerNote || defaultBranding.footerNote,
   };
 }
 
@@ -127,6 +176,7 @@ router.post("/", async (req, res) => {
     }
 
     const lineItems = normalizeLineItems(req.body.lineItems);
+    const branding = normalizeBranding(req.body.branding);
     const { totalPrice } = calculateInvoiceTotals(lineItems, gstSlab);
 
     const invoice = await Invoice.create({
@@ -136,6 +186,7 @@ router.post("/", async (req, res) => {
       gstSlab,
       totalPrice,
       customerId: req.auth.customerId,
+      branding,
     });
 
     const populatedInvoice = await invoice.populate("customerId", invoiceCustomerSelection);

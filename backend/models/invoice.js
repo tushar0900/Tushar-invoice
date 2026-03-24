@@ -1,5 +1,12 @@
 import mongoose from "mongoose";
 
+const defaultBranding = {
+  templateKey: "professional",
+  brandLabel: "GST Tax Invoice",
+  headerNote: "Clear billing with a branded customer-ready layout.",
+  footerNote: "Thank you for your business. This invoice is computer generated.",
+};
+
 const lineItemSchema = new mongoose.Schema(
   {
     product: {
@@ -22,6 +29,37 @@ const lineItemSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0.01,
+    },
+  },
+  { _id: false }
+);
+
+const brandingSchema = new mongoose.Schema(
+  {
+    templateKey: {
+      type: String,
+      required: true,
+      enum: ["professional", "retail", "studio"],
+      default: defaultBranding.templateKey,
+    },
+    brandLabel: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 60,
+      default: defaultBranding.brandLabel,
+    },
+    headerNote: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: defaultBranding.headerNote,
+    },
+    footerNote: {
+      type: String,
+      trim: true,
+      maxlength: 180,
+      default: defaultBranding.footerNote,
     },
   },
   { _id: false }
@@ -55,6 +93,10 @@ const invoice = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
       required: true,
+    },
+    branding: {
+      type: brandingSchema,
+      default: () => ({ ...defaultBranding }),
     },
   },
   { timestamps: true }
