@@ -555,19 +555,11 @@ export default function Invoice() {
         const response = await axios.get(`${API_BASE_URL}/api/invoices/me`);
         const nextInvoices = response.data.map(normalizeInvoiceRecord);
         setHistoryInvoices(nextInvoices);
-        setSelectedHistoryInvoice((currentSelection) => {
-          if (!nextInvoices.length) {
-            return null;
-          }
-
-          if (!currentSelection) {
-            return nextInvoices[0];
-          }
-
-          return (
-            nextInvoices.find((invoice) => invoice._id === currentSelection._id) || nextInvoices[0]
-          );
-        });
+        setSelectedHistoryInvoice((currentSelection) =>
+          currentSelection
+            ? nextInvoices.find((invoice) => invoice._id === currentSelection._id) || null
+            : null
+        );
       } catch (error) {
         if (error.response?.status === 401) {
           clearAuthSession();
@@ -650,17 +642,11 @@ export default function Invoice() {
       const response = await axios.get(`${API_BASE_URL}/api/invoices/me`);
       const nextInvoices = response.data.map(normalizeInvoiceRecord);
       setHistoryInvoices(nextInvoices);
-      setSelectedHistoryInvoice((currentSelection) => {
-        if (!nextInvoices.length) {
-          return null;
-        }
-
-        if (!currentSelection) {
-          return nextInvoices[0];
-        }
-
-        return nextInvoices.find((invoice) => invoice._id === currentSelection._id) || nextInvoices[0];
-      });
+      setSelectedHistoryInvoice((currentSelection) =>
+        currentSelection
+          ? nextInvoices.find((invoice) => invoice._id === currentSelection._id) || null
+          : null
+      );
     } catch (error) {
       if (error.response?.status === 401) {
         redirectToLogin();
@@ -687,7 +673,7 @@ export default function Invoice() {
     setGstRate(Number(invoice.gstSlab) || 5);
     setBranding(normalizeBranding(invoice.branding));
     clearReceiptImport();
-    setSelectedHistoryInvoice(invoice);
+    setSelectedHistoryInvoice(null);
     setActiveView("create");
 
     if (typeof window !== "undefined") {
@@ -971,7 +957,7 @@ export default function Invoice() {
           ...currentInvoices.filter((invoice) => invoice._id !== savedInvoice._id),
         ];
       });
-      setSelectedHistoryInvoice(savedInvoice);
+      setSelectedHistoryInvoice(null);
       setEditingInvoiceId("");
       setActiveView("history");
       await resetInvoiceForm();
@@ -1066,7 +1052,10 @@ export default function Invoice() {
           <button
             type="button"
             className={`mode-btn ${activeView === "history" ? "active" : ""}`}
-            onClick={() => setActiveView("history")}
+            onClick={() => {
+              setSelectedHistoryInvoice(null);
+              setActiveView("history");
+            }}
           >
             Invoice History
           </button>
@@ -1126,11 +1115,11 @@ export default function Invoice() {
                       type="button"
                       className="secondary-btn"
                       onClick={() => {
-                        setSelectedHistoryInvoice(match.invoice);
+                        setSelectedHistoryInvoice(null);
                         setActiveView("history");
                       }}
                     >
-                      Review Match
+                      Open History
                     </button>
                   </div>
                 ))}
