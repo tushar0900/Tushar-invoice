@@ -859,19 +859,6 @@ button:focus {
   color: #425466;
 }
 
-.invoice-template-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: var(--brand-chip-bg, rgba(34,94,96,0.1));
-  color: var(--brand-chip-text, var(--accent-strong));
-  text-transform: uppercase;
-  letter-spacing: 0.45px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .invoice-brand-meta-card {
   align-self: start;
   display: flex;

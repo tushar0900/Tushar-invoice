@@ -90,10 +90,8 @@ function buildInvoiceMarkup({
   const invoiceSubtotal = lineItems.reduce((sum, item) => sum + Number(item.total), 0);
   const invoiceGstAmount = (invoiceSubtotal * Number(gstSlab)) / 100;
   const normalizedBranding = normalizeBranding(branding);
-  const template = getBrandingTemplate(normalizedBranding.templateKey);
   const brandingCssVars = getBrandingCssVars(normalizedBranding);
   const bannerBackground = brandingCssVars["--brand-banner"];
-  const chipBackground = brandingCssVars["--brand-chip-bg"];
   const createdAtMarkup = createdAt
     ? `
           <div style="display:flex;flex-direction:column;gap:4px;">
@@ -111,10 +109,7 @@ function buildInvoiceMarkup({
       <div style="margin-bottom:24px;padding:22px;border:1px solid ${normalizedBranding.border};border-radius:18px;background:${bannerBackground};">
         <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;">
           <div style="flex:1 1 auto;min-width:0;">
-            <span style="display:inline-flex;align-items:center;padding:7px 12px;border-radius:999px;background:${chipBackground};color:${normalizedBranding.accentStrong};font-size:12px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">
-              ${escapeHtml(template.name)}
-            </span>
-            <h1 style="margin:16px 0 10px;font-size:30px;font-weight:700;color:${normalizedBranding.accentStrong};">
+            <h1 style="margin:0 0 10px;font-size:30px;font-weight:700;color:${normalizedBranding.accentStrong};">
               ${escapeHtml(normalizedBranding.brandLabel)}
             </h1>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#425466;">
@@ -209,7 +204,6 @@ function InvoiceDocumentPreview({
   createdAt,
 }) {
   const normalizedBranding = normalizeBranding(branding);
-  const activeTemplate = getBrandingTemplate(normalizedBranding.templateKey);
   const invoiceSubtotal = lineItems.reduce((sum, item) => sum + Number(item.total), 0);
   const invoiceGstAmount = (invoiceSubtotal * Number(gstSlab)) / 100;
 
@@ -217,7 +211,6 @@ function InvoiceDocumentPreview({
     <div className="invoice-preview branded-invoice-preview" style={getBrandingCssVars(normalizedBranding)}>
       <div className="invoice-brand-banner">
         <div className="invoice-brand-copy">
-          <span className="invoice-template-chip">{activeTemplate.name}</span>
           <h1>{normalizedBranding.brandLabel}</h1>
           <p>{normalizedBranding.headerNote}</p>
         </div>
