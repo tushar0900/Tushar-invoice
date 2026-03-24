@@ -111,6 +111,43 @@ function calculateInvoiceTotals(lineItems, gstSlab) {
   };
 }
 
+function parseInvoicePayload(body, { requireInvoiceNumber = true } = {}) {
+  const companyName = normalizeCompanyName(body.companyName);
+  const gstSlab = Number(body.gstSlab);
+
+  if (!companyName || companyName.length > 120) {
+    throw new Error("Company name must be between 1 and 120 characters.");
+  }
+
+  if (!allowedGstSlabs.has(gstSlab)) {
+    throw new Error("Unsupported GST slab selected.");
+  }
+
+  const lineItems = normalizeLineItems(body.lineItems);
+  const branding = normalizeBranding(body.branding);
+  const { totalPrice } = calculateInvoiceTotals(lineItems, gstSlab);
+
+  const payload = {
+    companyName,
+    lineItems,
+    gstSlab,
+    totalPrice,
+    branding,
+  };
+
+  if (requireInvoiceNumber) {
+    const invoiceNumber = normalizeInvoiceNumber(body.invoiceNumber);
+
+    if (!invoiceNumber || !/^INV-[A-Z0-9-]{3,40}$/.test(invoiceNumber)) {
+      throw new Error("A valid invoice number is required.");
+    }
+
+    payload.invoiceNumber = invoiceNumber;
+  }
+
+  return payload;
+}
+
 function normalizeBranding(brandingInput) {
   if (brandingInput == null || typeof brandingInput !== "object") {
     return { ...defaultBranding };
@@ -199,34 +236,11 @@ router.get("/me", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const companyName = normalizeCompanyName(req.body.companyName);
-    const invoiceNumber = normalizeInvoiceNumber(req.body.invoiceNumber);
-    const gstSlab = Number(req.body.gstSlab);
-
-    if (!invoiceNumber || !/^INV-[A-Z0-9-]{3,40}$/.test(invoiceNumber)) {
-      return res.status(400).json({ error: "A valid invoice number is required." });
-    }
-
-    if (!companyName || companyName.length > 120) {
-      return res.status(400).json({ error: "Company name must be between 1 and 120 characters." });
-    }
-
-    if (!allowedGstSlabs.has(gstSlab)) {
-      return res.status(400).json({ error: "Unsupported GST slab selected." });
-    }
-
-    const lineItems = normalizeLineItems(req.body.lineItems);
-    const branding = normalizeBranding(req.body.branding);
-    const { totalPrice } = calculateInvoiceTotals(lineItems, gstSlab);
+    const invoicePayload = parseInvoicePayload(req.body, { requireInvoiceNumber: true });
 
     const invoice = await Invoice.create({
-      invoiceNumber,
-      companyName,
-      lineItems,
-      gstSlab,
-      totalPrice,
+      ...invoicePayload,
       customerId: req.auth.customerId,
-      branding,
     });
 
     const populatedInvoice = await invoice.populate("customerId", invoiceCustomerSelection);
@@ -243,6 +257,35 @@ router.post("/", async (req, res) => {
     }
 
     return res.status(500).json({ error: "Unable to create invoice right now." });
+  }
+});
+
+router.put("/:id", async (req, res) => {
+  try {
+    const invoice = await Invoice.findOne({ _id: req.params.id, customerId: req.auth.customerId });
+
+    if (!invoice) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const invoicePayload = parseInvoicePayload(req.body, { requireInvoiceNumber: false });
+
+    invoice.companyName = invoicePayload.companyName;
+    invoice.lineItems = invoicePayload.lineItems;
+    invoice.gstSlab = invoicePayload.gstSlab;
+    invoice.totalPrice = invoicePayload.totalPrice;
+    invoice.branding = invoicePayload.branding;
+
+    await invoice.save();
+    await invoice.populate("customerId", invoiceCustomerSelection);
+
+    return res.json(invoice);
+  } catch (err) {
+    if (err instanceof Error) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    return res.status(500).json({ error: "Unable to update invoice right now." });
   }
 });
 

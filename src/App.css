@@ -210,6 +210,13 @@ button:focus {
   outline-offset: 2px;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 /* Save button */
 .save-btn {
   background: linear-gradient(180deg, var(--accent-strong), var(--accent));
@@ -584,6 +591,26 @@ button:focus {
 .customer-selection h4 {
   margin-top: 0;
   margin-bottom: 16px;
+}
+
+.editor-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent-strong);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(44,122,123,0.06) 0%, rgba(44,122,123,0.02) 100%);
+}
+
+.editor-mode-copy {
+  min-width: 0;
+}
+
+.editor-mode-copy h4 {
+  margin: 0 0 6px;
 }
 
 .receipt-import-panel {
@@ -1110,11 +1137,28 @@ button:focus {
   margin-top: 24px;
 }
 
+.history-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.history-detail-header h4 {
+  margin: 0 0 6px;
+}
+
 .history-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.history-view-btn {
+  padding: 8px 12px;
+  font-size: 12px;
 }
 
 .history-download-btn {
@@ -1271,6 +1315,7 @@ button:focus {
 
   .page-toolbar,
   .history-panel-header,
+  .history-detail-header,
   .row,
   .row.single {
     flex-direction: column;
@@ -1285,6 +1330,7 @@ button:focus {
 
   .button-group,
   .btn-row,
+  .editor-mode-banner,
   .receipt-import-actions {
     flex-direction: column;
     align-items: stretch;

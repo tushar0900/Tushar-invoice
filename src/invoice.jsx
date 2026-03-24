@@ -74,6 +74,33 @@ function normalizeInvoiceRecord(invoice) {
   };
 }
 
+function createCustomerSnapshot(customer) {
+  if (!customer) {
+    return {};
+  }
+
+  return {
+    _id: customer._id,
+    name: customer.name || "",
+    mobileNumber: customer.mobileNumber || "",
+    address: customer.address || "",
+    gstNumber: customer.gstNumber || "",
+  };
+}
+
+function createEditableLineItems(items) {
+  const nextItems = Array.isArray(items)
+    ? items.map((item) => ({
+        product: String(item?.product || ""),
+        rate: Number(item?.rate) || 0,
+        quantity: Number(item?.quantity) || 0,
+        total: Number(item?.total) || 0,
+      }))
+    : [];
+
+  return nextItems.length ? nextItems : createInitialLineItems();
+}
+
 function buildInvoiceMarkup({
   invoiceNumber,
   customerName,
@@ -326,6 +353,7 @@ export default function Invoice() {
   const [lineItems, setLineItems] = useState(createInitialLineItems);
   const [gstRate, setGstRate] = useState(5);
   const [branding, setBranding] = useState(getStoredBranding);
+  const [editingInvoiceId, setEditingInvoiceId] = useState("");
   const [activeView, setActiveView] = useState("create");
   const [historyInvoices, setHistoryInvoices] = useState([]);
   const [selectedHistoryInvoice, setSelectedHistoryInvoice] = useState(null);
@@ -336,11 +364,14 @@ export default function Invoice() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrStatusMessage, setOcrStatusMessage] = useState("");
   const [ocrExtractedText, setOcrExtractedText] = useState("");
+  const [saveLoading, setSaveLoading] = useState(false);
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
   const grandTotal = subtotal + gstAmount;
+  const isEditingInvoice = Boolean(editingInvoiceId);
   const previewBranding = normalizeBranding(branding);
+  const loggedInCustomerSnapshot = createCustomerSnapshot(loggedInUser);
   const redirectToLogin = () => {
     clearAuthSession();
     navigate("/login");
@@ -543,6 +574,26 @@ export default function Invoice() {
     }
   };
 
+  const openInvoiceForEditing = (invoice) => {
+    if (!invoice?._id) {
+      return;
+    }
+
+    setEditingInvoiceId(invoice._id);
+    setInvoiceNo(invoice.invoiceNumber || "");
+    setCompanyName(invoice.companyName || "");
+    setLineItems(createEditableLineItems(invoice.lineItems));
+    setGstRate(Number(invoice.gstSlab) || 5);
+    setBranding(normalizeBranding(invoice.branding));
+    clearReceiptImport();
+    setSelectedHistoryInvoice(invoice);
+    setActiveView("create");
+
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   const handleLineItemChange = (index, field, value) => {
     const updatedItems = [...lineItems];
     updatedItems[index][field] = field === "product" ? value : Number(value);
@@ -573,6 +624,11 @@ export default function Invoice() {
     setGstRate(5);
     clearReceiptImport();
     await generateInvoiceNumber();
+  };
+
+  const cancelInvoiceEditing = async () => {
+    setEditingInvoiceId("");
+    await resetInvoiceForm();
   };
 
   const buildHistoryMarkup = (invoice) => {
@@ -750,34 +806,49 @@ export default function Invoice() {
       return;
     }
 
+    const editingMode = isEditingInvoice;
+
+    setSaveLoading(true);
+
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/invoices`, {
-        invoiceNumber: invoiceNo,
+      const invoicePayload = {
         companyName: companyName.trim(),
         lineItems,
         gstSlab: gstRate,
         totalPrice: grandTotal,
         branding: previewBranding,
-      });
+      };
+      const response = editingMode
+        ? await axios.put(`${API_BASE_URL}/api/invoices/${editingInvoiceId}`, invoicePayload)
+        : await axios.post(`${API_BASE_URL}/api/invoices`, {
+            invoiceNumber: invoiceNo,
+            ...invoicePayload,
+          });
 
       const savedInvoice = normalizeInvoiceRecord({
         ...response.data,
         companyName: response.data.companyName || companyName.trim(),
-        customerId: {
-          _id: loggedInUser._id,
-          name: loggedInUser.name,
-          mobileNumber: loggedInUser.mobileNumber,
-          address: loggedInUser.address,
-          gstNumber: loggedInUser.gstNumber,
-        },
+        customerId: response.data.customerId || loggedInCustomerSnapshot,
       });
 
-      setHistoryInvoices((currentInvoices) => [savedInvoice, ...currentInvoices]);
+      setHistoryInvoices((currentInvoices) => {
+        if (editingMode) {
+          return currentInvoices.map((invoice) =>
+            invoice._id === savedInvoice._id ? savedInvoice : invoice
+          );
+        }
+
+        return [
+          savedInvoice,
+          ...currentInvoices.filter((invoice) => invoice._id !== savedInvoice._id),
+        ];
+      });
       setSelectedHistoryInvoice(savedInvoice);
+      setEditingInvoiceId("");
       setActiveView("history");
       await resetInvoiceForm();
-      fetchInvoiceHistory();
-      alert("Invoice saved successfully");
+      await fetchInvoiceHistory();
+      alert(editingMode ? "Invoice updated successfully" : "Invoice saved successfully");
     } catch (error) {
       if (error.response?.status === 401) {
         redirectToLogin();
@@ -785,6 +856,8 @@ export default function Invoice() {
       }
 
       alert(error.response?.data?.error || `Error saving invoice: ${error.message}`);
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -842,7 +915,13 @@ export default function Invoice() {
     <div className="annexure invoice-page">
       <div className="page-toolbar">
         <div className="toolbar-copy">
-          <h2>{activeView === "history" ? "Invoice History" : "Generate Invoice"}</h2>
+          <h2>
+            {activeView === "history"
+              ? "Invoice History"
+              : isEditingInvoice
+                ? "Edit Invoice"
+                : "Generate Invoice"}
+          </h2>
           <small>
             Signed in as <strong>{name || "Customer"}</strong>
           </small>
@@ -871,6 +950,26 @@ export default function Invoice() {
 
       {activeView === "create" ? (
         <>
+          {isEditingInvoice ? (
+            <div className="editor-mode-banner">
+              <div className="editor-mode-copy">
+                <h4>Editing Saved Invoice</h4>
+                <small>
+                  Update the items, GST slab, company name, or invoice theme for {invoiceNo}.
+                </small>
+              </div>
+
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => void cancelInvoiceEditing()}
+                disabled={saveLoading}
+              >
+                Cancel Edit
+              </button>
+            </div>
+          ) : null}
+
           <div className="receipt-import-panel">
             <h4>Receipt or Image to Invoice</h4>
             <small>
@@ -970,10 +1069,10 @@ export default function Invoice() {
 
           <div className="branding-panel">
             <div className="branding-panel-copy">
-              <h4>Branding Template</h4>
+              <h4>Invoice Theme</h4>
               <small>
-                Pick a reusable visual style and adjust the brand copy shown in the header and
-                footer of every invoice.
+                Pick a visual theme and adjust the invoice copy shown in the header and footer.
+                {isEditingInvoice ? " Changes here will update this saved invoice." : ""}
               </small>
             </div>
 
@@ -1038,8 +1137,8 @@ export default function Invoice() {
             <div className="branding-panel-copy">
               <h4>Template Colors</h4>
               <small>
-                Fine-tune the selected template colors for this invoice preview and any invoices
-                you save from here.
+                Fine-tune the selected theme colors for this invoice preview and any invoices you
+                save from here.
               </small>
             </div>
 
@@ -1170,10 +1269,10 @@ export default function Invoice() {
           </div>
 
           <div className="btn-row">
-            <button className="save-btn" onClick={handleSave}>
-              SAVE
+            <button className="save-btn" onClick={handleSave} disabled={saveLoading}>
+              {saveLoading ? (isEditingInvoice ? "Updating..." : "Saving...") : isEditingInvoice ? "Update Invoice" : "Save Invoice"}
             </button>
-            <button className="download-btn" onClick={handleDownloadPDF}>
+            <button className="download-btn" onClick={handleDownloadPDF} disabled={saveLoading}>
               Download as PDF
             </button>
           </div>
@@ -1231,12 +1330,19 @@ export default function Invoice() {
                           <div className="history-actions">
                             <button
                               type="button"
-                              className={`edit-btn ${
+                              className={`secondary-btn history-view-btn ${
                                 selectedHistoryInvoice?._id === invoice._id ? "history-active" : ""
                               }`}
                               onClick={() => setSelectedHistoryInvoice(invoice)}
                             >
                               View
+                            </button>
+                            <button
+                              type="button"
+                              className="edit-btn"
+                              onClick={() => openInvoiceForEditing(invoice)}
+                            >
+                              Edit
                             </button>
                             <button
                               type="button"
@@ -1255,6 +1361,24 @@ export default function Invoice() {
 
               {selectedHistoryInvoice ? (
                 <div className="history-detail">
+                  <div className="history-detail-header">
+                    <div>
+                      <h4>Invoice Preview</h4>
+                      <small>
+                        Theme:{" "}
+                        {getBrandingTemplate(selectedHistoryInvoice.branding?.templateKey).name}
+                      </small>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="edit-btn"
+                      onClick={() => openInvoiceForEditing(selectedHistoryInvoice)}
+                    >
+                      Edit This Invoice
+                    </button>
+                  </div>
+
                   <InvoiceDocumentPreview
                     invoiceNumber={selectedHistoryInvoice.invoiceNumber}
                     customerName={selectedHistoryInvoice.customerId?.name || name}
