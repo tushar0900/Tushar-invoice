@@ -457,12 +457,14 @@ export default function Invoice() {
   const [ocrStatusMessage, setOcrStatusMessage] = useState("");
   const [ocrExtractedText, setOcrExtractedText] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
+  const [isBrandingMenuOpen, setIsBrandingMenuOpen] = useState(false);
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
   const grandTotal = subtotal + gstAmount;
   const isEditingInvoice = Boolean(editingInvoiceId);
   const previewBranding = normalizeBranding(branding);
+  const activeBrandingTemplate = getBrandingTemplate(previewBranding.templateKey);
   const loggedInCustomerSnapshot = createCustomerSnapshot(loggedInUser);
   const duplicateMatches = isEditingInvoice
     ? []
@@ -1231,101 +1233,137 @@ export default function Invoice() {
           </div>
 
           <div className="branding-panel">
-            <div className="branding-panel-copy">
-              <h4>Invoice Theme</h4>
-              <small>
-                Pick a visual theme and adjust the invoice copy shown in the header and footer.
-                {isEditingInvoice ? " Changes here will update this saved invoice." : ""}
-              </small>
-            </div>
+            <button
+              type="button"
+              className="branding-menu-toggle"
+              aria-expanded={isBrandingMenuOpen}
+              aria-controls="invoice-theme-menu"
+              onClick={() => setIsBrandingMenuOpen((currentValue) => !currentValue)}
+            >
+              <div className="branding-menu-copy">
+                <div className="branding-panel-copy">
+                  <h4>Invoice Theme</h4>
+                  <small>
+                    Pick a visual theme and adjust the invoice copy shown in the header and footer.
+                    {isEditingInvoice ? " Changes here will update this saved invoice." : ""}
+                  </small>
+                </div>
 
-            <div className="branding-template-grid">
-              {BRANDING_TEMPLATES.map((template) => (
-                <button
-                  key={template.key}
-                  type="button"
-                  className={`branding-template-card ${
-                    previewBranding.templateKey === template.key ? "active" : ""
-                  }`}
-                  onClick={() => selectBrandingTemplate(template.key)}
-                  style={{
-                    "--template-accent": template.accent,
-                    "--template-banner": `linear-gradient(135deg, ${template.bannerStart} 0%, ${template.bannerEnd} 100%)`,
-                  }}
-                >
-                  <span className="branding-template-swatch" />
-                  <strong>{template.name}</strong>
-                  <small>{template.description}</small>
+                <div className="branding-menu-summary">
+                  <strong>{activeBrandingTemplate.name}</strong>
+                  <span>{isBrandingMenuOpen ? "Hide theme options" : "Show theme options"}</span>
+                </div>
+              </div>
+
+              <span
+                className={`branding-menu-chevron ${isBrandingMenuOpen ? "is-open" : ""}`}
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 20 20" fill="none">
+                  <path
+                    d="m5 7.5 5 5 5-5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
+
+            <div
+              id="invoice-theme-menu"
+              className="branding-panel-content"
+              hidden={!isBrandingMenuOpen}
+            >
+              <div className="branding-template-grid">
+                {BRANDING_TEMPLATES.map((template) => (
+                  <button
+                    key={template.key}
+                    type="button"
+                    className={`branding-template-card ${
+                      previewBranding.templateKey === template.key ? "active" : ""
+                    }`}
+                    onClick={() => selectBrandingTemplate(template.key)}
+                    style={{
+                      "--template-accent": template.accent,
+                      "--template-banner": `linear-gradient(135deg, ${template.bannerStart} 0%, ${template.bannerEnd} 100%)`,
+                    }}
+                  >
+                    <span className="branding-template-swatch" />
+                    <strong>{template.name}</strong>
+                    <small>{template.description}</small>
+                  </button>
+                ))}
+              </div>
+
+              <div className="branding-fields-grid">
+                <div className="summary-field">
+                  <label htmlFor="brand-label">Brand Label</label>
+                  <input
+                    id="brand-label"
+                    value={branding.brandLabel || ""}
+                    onChange={(e) => updateBrandingField("brandLabel", e.target.value)}
+                    placeholder="GST Tax Invoice"
+                    maxLength={60}
+                  />
+                </div>
+
+                <div className="summary-field">
+                  <label htmlFor="brand-header-note">Header Note</label>
+                  <textarea
+                    id="brand-header-note"
+                    value={branding.headerNote || ""}
+                    onChange={(e) => updateBrandingField("headerNote", e.target.value)}
+                    placeholder="Add a short line below the invoice title"
+                    maxLength={120}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="summary-field branding-footer-field">
+                  <label htmlFor="brand-footer-note">Footer Note</label>
+                  <textarea
+                    id="brand-footer-note"
+                    value={branding.footerNote || ""}
+                    onChange={(e) => updateBrandingField("footerNote", e.target.value)}
+                    placeholder="Thank you for your business. This invoice is computer generated."
+                    maxLength={180}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="branding-panel-copy">
+                <h4>Template Colors</h4>
+                <small>
+                  Fine-tune the selected theme colors for this invoice preview and any invoices you
+                  save from here.
+                </small>
+              </div>
+
+              <div className="branding-color-grid">
+                {BRANDING_COLOR_CONTROLS.map((control) => (
+                  <label key={control.key} className="branding-color-field">
+                    <span className="branding-color-label">{control.label}</span>
+                    <small>{control.description}</small>
+                    <div className="branding-color-input">
+                      <input
+                        type="color"
+                        value={previewBranding[control.key]}
+                        onChange={(e) => updateBrandingField(control.key, e.target.value)}
+                      />
+                      <code>{previewBranding[control.key]}</code>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="branding-actions">
+                <button type="button" className="secondary-btn" onClick={resetBrandingColors}>
+                  Reset Colors to {activeBrandingTemplate.name}
                 </button>
-              ))}
-            </div>
-
-            <div className="branding-fields-grid">
-              <div className="summary-field">
-                <label htmlFor="brand-label">Brand Label</label>
-                <input
-                  id="brand-label"
-                  value={branding.brandLabel || ""}
-                  onChange={(e) => updateBrandingField("brandLabel", e.target.value)}
-                  placeholder="GST Tax Invoice"
-                  maxLength={60}
-                />
               </div>
-
-              <div className="summary-field">
-                <label htmlFor="brand-header-note">Header Note</label>
-                <textarea
-                  id="brand-header-note"
-                  value={branding.headerNote || ""}
-                  onChange={(e) => updateBrandingField("headerNote", e.target.value)}
-                  placeholder="Add a short line below the invoice title"
-                  maxLength={120}
-                  rows={3}
-                />
-              </div>
-
-              <div className="summary-field branding-footer-field">
-                <label htmlFor="brand-footer-note">Footer Note</label>
-                <textarea
-                  id="brand-footer-note"
-                  value={branding.footerNote || ""}
-                  onChange={(e) => updateBrandingField("footerNote", e.target.value)}
-                  placeholder="Thank you for your business. This invoice is computer generated."
-                  maxLength={180}
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <div className="branding-panel-copy">
-              <h4>Template Colors</h4>
-              <small>
-                Fine-tune the selected theme colors for this invoice preview and any invoices you
-                save from here.
-              </small>
-            </div>
-
-            <div className="branding-color-grid">
-              {BRANDING_COLOR_CONTROLS.map((control) => (
-                <label key={control.key} className="branding-color-field">
-                  <span className="branding-color-label">{control.label}</span>
-                  <small>{control.description}</small>
-                  <div className="branding-color-input">
-                    <input
-                      type="color"
-                      value={previewBranding[control.key]}
-                      onChange={(e) => updateBrandingField(control.key, e.target.value)}
-                    />
-                    <code>{previewBranding[control.key]}</code>
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            <div className="branding-actions">
-              <button type="button" className="secondary-btn" onClick={resetBrandingColors}>
-                Reset Colors to {getBrandingTemplate(previewBranding.templateKey).name}
-              </button>
             </div>
           </div>
 
