@@ -432,6 +432,122 @@ function InvoiceDocumentPreview({
   );
 }
 
+function InvoiceActionIcon({ kind }) {
+  switch (kind) {
+    case "create":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 5v14M5 12h14"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M4 12a8 8 0 1 0 2.34-5.66L4 8.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M12 8v4l2.5 1.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "logout":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M10 17l5-5-5-5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M15 12H4"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M20 4v16"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "theme":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 3a9 9 0 1 0 9 9c0-.8-.7-1.5-1.5-1.5H17a2 2 0 0 1 0-4h2.5A1.5 1.5 0 0 0 21 5a9 9 0 0 0-9-2Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle cx="8.5" cy="10" r="1" fill="currentColor" />
+          <circle cx="11" cy="7.5" r="1" fill="currentColor" />
+          <circle cx="7" cy="14" r="1" fill="currentColor" />
+        </svg>
+      );
+    case "receipt":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M7 4h10a2 2 0 0 1 2 2v12l-2-1.5L15 18l-3-1.5L9 18l-2-1.5L5 18V6a2 2 0 0 1 2-2Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M9 9h6M9 12h6"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function InvoiceActionButton({ active = false, label, hint, kind, onClick, className = "" }) {
+  return (
+    <button
+      type="button"
+      className={`toolbar-action-btn ${active ? "active" : ""} ${className}`.trim()}
+      onClick={onClick}
+    >
+      <span className="toolbar-action-icon">
+        <InvoiceActionIcon kind={kind} />
+      </span>
+      <span className="toolbar-action-copy">
+        <strong>{label}</strong>
+        <small>{hint}</small>
+      </span>
+    </button>
+  );
+}
+
 export default function Invoice() {
   const navigate = useNavigate();
   const receiptPreviewUrlRef = useRef(null);
@@ -457,7 +573,7 @@ export default function Invoice() {
   const [ocrStatusMessage, setOcrStatusMessage] = useState("");
   const [ocrExtractedText, setOcrExtractedText] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
-  const [isBrandingMenuOpen, setIsBrandingMenuOpen] = useState(false);
+  const [activeUtilityPanel, setActiveUtilityPanel] = useState("");
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
@@ -519,6 +635,12 @@ export default function Invoice() {
   useEffect(() => {
     persistBranding(branding);
   }, [branding]);
+
+  useEffect(() => {
+    if (activeView !== "create") {
+      setActiveUtilityPanel("");
+    }
+  }, [activeView]);
 
   useEffect(() => {
     let isActive = true;
@@ -1027,6 +1149,10 @@ export default function Invoice() {
       });
   };
 
+  const toggleUtilityPanel = (panelKey) => {
+    setActiveUtilityPanel((currentPanel) => (currentPanel === panelKey ? "" : panelKey));
+  };
+
   return (
     <div className="annexure invoice-page">
       <div className="page-toolbar">
@@ -1044,203 +1170,140 @@ export default function Invoice() {
         </div>
 
         <div className="toolbar-actions">
-          <button
-            type="button"
-            className={`mode-btn ${activeView === "create" ? "active" : ""}`}
+          <InvoiceActionButton
+            active={activeView === "create"}
+            label="Create Invoice"
+            hint="Draft and edit"
+            kind="create"
             onClick={() => setActiveView("create")}
-          >
-            Create Invoice
-          </button>
-          <button
-            type="button"
-            className={`mode-btn ${activeView === "history" ? "active" : ""}`}
+          />
+          <InvoiceActionButton
+            active={activeView === "history"}
+            label="Invoice History"
+            hint="View saved invoices"
+            kind="history"
             onClick={() => {
               setSelectedHistoryInvoice(null);
               setActiveView("history");
             }}
-          >
-            Invoice History
-          </button>
-          <button type="button" className="secondary-btn toolbar-btn" onClick={handleLogout}>
-            Logout
-          </button>
+          />
+          <InvoiceActionButton
+            label="Logout"
+            hint="End this session"
+            kind="logout"
+            onClick={handleLogout}
+          />
         </div>
       </div>
 
       {activeView === "create" ? (
-        <>
-          {isEditingInvoice ? (
-            <div className="editor-mode-banner">
-              <div className="editor-mode-copy">
-                <h4>Editing Saved Invoice</h4>
-                <small>
-                  Update the items, GST slab, company name, or invoice theme for {invoiceNo}.
-                </small>
-              </div>
-
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => void cancelInvoiceEditing()}
-                disabled={saveLoading}
-              >
-                Cancel Edit
-              </button>
-            </div>
-          ) : null}
-
-          {!isEditingInvoice && duplicateMatches.length > 0 ? (
-            <div className="duplicate-warning-panel">
-              <div className="duplicate-warning-header">
-                <div>
-                  <h4>Duplicate Invoice Warning</h4>
-                  <small>
-                    This draft looks similar to {duplicateMatches.length} saved invoice
-                    {duplicateMatches.length === 1 ? "" : "s"} for this customer.
-                  </small>
-                </div>
-              </div>
-
-              <div className="duplicate-warning-list">
-                {duplicateMatches.slice(0, 3).map((match) => (
-                  <div key={match.invoice._id} className="duplicate-warning-card">
-                    <div className="duplicate-warning-copy">
-                      <strong>{match.invoice.invoiceNumber}</strong>
-                      <small>
-                        {formatDateTime(match.invoice.createdAt)} •{" "}
-                        {formatCurrency(match.invoice.totalPrice)}
-                      </small>
-                      <span>{describeDuplicateMatch(match)}</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={() => {
-                        setSelectedHistoryInvoice(null);
-                        setActiveView("history");
-                      }}
-                    >
-                      Open History
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {duplicateMatches.length > 3 ? (
-                <small className="duplicate-warning-more">
-                  {duplicateMatches.length - 3} more matching invoices found in history.
-                </small>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="receipt-import-panel">
-            <h4>Receipt or Image to Invoice</h4>
-            <small>
-              Upload a clear receipt image to prefill company name, GST slab, and line items.
-              Review the imported values before saving.
-            </small>
-
-            <div className="receipt-import-actions">
-              <label className="secondary-btn receipt-upload-btn">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="receipt-upload-input"
-                  onChange={handleReceiptImport}
-                  disabled={ocrLoading}
-                />
-                {ocrLoading ? "Scanning Receipt..." : "Upload Receipt Image"}
-              </label>
-
-              {receiptImagePreview ? (
-                <button
-                  type="button"
-                  className="clear-btn"
-                  onClick={clearReceiptImport}
-                  disabled={ocrLoading}
-                >
-                  Clear Scan
-                </button>
-              ) : null}
-
-              <small className="receipt-file-copy">
-                {receiptFileName
-                  ? `Selected file: ${receiptFileName}`
-                  : "Use a flat, well-lit image for better OCR results."}
-              </small>
+        <div className="invoice-create-layout">
+          <div className="invoice-tools-menu">
+            <div className="invoice-tools-copy">
+              <strong>Quick Tools</strong>
+              <small>Open theme settings or scan a receipt without leaving the invoice screen.</small>
             </div>
 
-            {ocrStatusMessage ? (
-              <div className={`receipt-status ${ocrLoading ? "receipt-status-loading" : ""}`}>
-                {ocrStatusMessage}
-              </div>
-            ) : null}
-
-            {receiptImagePreview ? (
-              <div className="receipt-preview">
-                <img src={receiptImagePreview} alt="Uploaded receipt preview" />
-              </div>
-            ) : null}
-
-            {ocrExtractedText ? (
-              <div className="receipt-text-panel">
-                <label>Extracted Text</label>
-                <textarea
-                  className="receipt-text-output"
-                  value={ocrExtractedText}
-                  readOnly
-                  rows={6}
-                />
-              </div>
-            ) : null}
-          </div>
-
-          <div className="customer-selection">
-            <h4>Logged In Customer</h4>
-
-            <div className="row single">
-              <label>Customer Mobile Number</label>
-              <input value={mobile} disabled />
-            </div>
-
-            <div className="details-grid">
-              <div className="detail-item">
-                <label>Name:</label>
-                <span>{name}</span>
-              </div>
-              <div className="detail-item">
-                <label>Address:</label>
-                <span>{address}</span>
-              </div>
-              <div className="detail-item">
-                <label>GST Number:</label>
-                <span>{gstNo}</span>
-              </div>
-            </div>
-
-            <div className="row single">
-              <label>Company Name</label>
-              <input
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Enter company name for this invoice"
-                required
+            <div className="invoice-tools-actions">
+              <InvoiceActionButton
+                active={activeUtilityPanel === "receipt"}
+                label="Receipt or Image"
+                hint="Prefill from OCR"
+                kind="receipt"
+                className="toolbar-tool-btn"
+                onClick={() => toggleUtilityPanel("receipt")}
+              />
+              <InvoiceActionButton
+                active={activeUtilityPanel === "theme"}
+                label="Invoice Theme"
+                hint={activeBrandingTemplate.name}
+                kind="theme"
+                className="toolbar-tool-btn"
+                onClick={() => toggleUtilityPanel("theme")}
               />
             </div>
           </div>
 
-          <div className="branding-panel">
-            <button
-              type="button"
-              className="branding-menu-toggle"
-              aria-expanded={isBrandingMenuOpen}
-              aria-controls="invoice-theme-menu"
-              onClick={() => setIsBrandingMenuOpen((currentValue) => !currentValue)}
-            >
-              <div className="branding-menu-copy">
+          {activeUtilityPanel === "receipt" ? (
+            <div className="receipt-import-panel invoice-tool-panel">
+              <div className="invoice-tool-panel-header">
+                <div>
+                  <h4>Receipt or Image to Invoice</h4>
+                  <small>
+                    Upload a clear receipt image to prefill company name, GST slab, and line items.
+                    Review the imported values before saving.
+                  </small>
+                </div>
+
+                <button
+                  type="button"
+                  className="secondary-btn invoice-tool-close-btn"
+                  onClick={() => setActiveUtilityPanel("")}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="receipt-import-actions">
+                <label className="secondary-btn receipt-upload-btn">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="receipt-upload-input"
+                    onChange={handleReceiptImport}
+                    disabled={ocrLoading}
+                  />
+                  {ocrLoading ? "Scanning Receipt..." : "Upload Receipt Image"}
+                </label>
+
+                {receiptImagePreview ? (
+                  <button
+                    type="button"
+                    className="clear-btn"
+                    onClick={clearReceiptImport}
+                    disabled={ocrLoading}
+                  >
+                    Clear Scan
+                  </button>
+                ) : null}
+
+                <small className="receipt-file-copy">
+                  {receiptFileName
+                    ? `Selected file: ${receiptFileName}`
+                    : "Use a flat, well-lit image for better OCR results."}
+                </small>
+              </div>
+
+              {ocrStatusMessage ? (
+                <div className={`receipt-status ${ocrLoading ? "receipt-status-loading" : ""}`}>
+                  {ocrStatusMessage}
+                </div>
+              ) : null}
+
+              {receiptImagePreview ? (
+                <div className="receipt-preview">
+                  <img src={receiptImagePreview} alt="Uploaded receipt preview" />
+                </div>
+              ) : null}
+
+              {ocrExtractedText ? (
+                <div className="receipt-text-panel">
+                  <label>Extracted Text</label>
+                  <textarea
+                    className="receipt-text-output"
+                    value={ocrExtractedText}
+                    readOnly
+                    rows={6}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {activeUtilityPanel === "theme" ? (
+            <div className="branding-panel invoice-tool-panel">
+              <div className="invoice-tool-panel-header">
                 <div className="branding-panel-copy">
                   <h4>Invoice Theme</h4>
                   <small>
@@ -1249,33 +1312,20 @@ export default function Invoice() {
                   </small>
                 </div>
 
-                <div className="branding-menu-summary">
-                  <strong>{activeBrandingTemplate.name}</strong>
-                  <span>{isBrandingMenuOpen ? "Hide theme options" : "Show theme options"}</span>
-                </div>
+                <button
+                  type="button"
+                  className="secondary-btn invoice-tool-close-btn"
+                  onClick={() => setActiveUtilityPanel("")}
+                >
+                  Close
+                </button>
               </div>
 
-              <span
-                className={`branding-menu-chevron ${isBrandingMenuOpen ? "is-open" : ""}`}
-                aria-hidden="true"
-              >
-                <svg viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="m5 7.5 5 5 5-5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-            </button>
+              <div className="branding-menu-summary">
+                <strong>{activeBrandingTemplate.name}</strong>
+                <span>Selected invoice theme</span>
+              </div>
 
-            <div
-              id="invoice-theme-menu"
-              className="branding-panel-content"
-              hidden={!isBrandingMenuOpen}
-            >
               <div className="branding-template-grid">
                 {BRANDING_TEMPLATES.map((template) => (
                   <button
@@ -1364,6 +1414,106 @@ export default function Invoice() {
                   Reset Colors to {activeBrandingTemplate.name}
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {isEditingInvoice ? (
+            <div className="editor-mode-banner">
+              <div className="editor-mode-copy">
+                <h4>Editing Saved Invoice</h4>
+                <small>
+                  Update the items, GST slab, company name, or invoice theme for {invoiceNo}.
+                </small>
+              </div>
+
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => void cancelInvoiceEditing()}
+                disabled={saveLoading}
+              >
+                Cancel Edit
+              </button>
+            </div>
+          ) : null}
+
+          {!isEditingInvoice && duplicateMatches.length > 0 ? (
+            <div className="duplicate-warning-panel">
+              <div className="duplicate-warning-header">
+                <div>
+                  <h4>Duplicate Invoice Warning</h4>
+                  <small>
+                    This draft looks similar to {duplicateMatches.length} saved invoice
+                    {duplicateMatches.length === 1 ? "" : "s"} for this customer.
+                  </small>
+                </div>
+              </div>
+
+              <div className="duplicate-warning-list">
+                {duplicateMatches.slice(0, 3).map((match) => (
+                  <div key={match.invoice._id} className="duplicate-warning-card">
+                    <div className="duplicate-warning-copy">
+                      <strong>{match.invoice.invoiceNumber}</strong>
+                      <small>
+                        {formatDateTime(match.invoice.createdAt)} •{" "}
+                        {formatCurrency(match.invoice.totalPrice)}
+                      </small>
+                      <span>{describeDuplicateMatch(match)}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        setSelectedHistoryInvoice(null);
+                        setActiveView("history");
+                      }}
+                    >
+                      Open History
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {duplicateMatches.length > 3 ? (
+                <small className="duplicate-warning-more">
+                  {duplicateMatches.length - 3} more matching invoices found in history.
+                </small>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="customer-selection">
+            <h4>Logged In Customer</h4>
+
+            <div className="row single">
+              <label>Customer Mobile Number</label>
+              <input value={mobile} disabled />
+            </div>
+
+            <div className="details-grid">
+              <div className="detail-item">
+                <label>Name:</label>
+                <span>{name}</span>
+              </div>
+              <div className="detail-item">
+                <label>Address:</label>
+                <span>{address}</span>
+              </div>
+              <div className="detail-item">
+                <label>GST Number:</label>
+                <span>{gstNo}</span>
+              </div>
+            </div>
+
+            <div className="row single">
+              <label>Company Name</label>
+              <input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Enter company name for this invoice"
+                required
+              />
             </div>
           </div>
 
@@ -1477,7 +1627,7 @@ export default function Invoice() {
               Download as PDF
             </button>
           </div>
-        </>
+        </div>
       ) : (
         <div className="history-panel">
           <div className="history-panel-header">
