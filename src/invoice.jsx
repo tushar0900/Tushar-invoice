@@ -434,6 +434,18 @@ function InvoiceDocumentPreview({
 
 function InvoiceActionIcon({ kind }) {
   switch (kind) {
+    case "menu":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M5 7h14M5 12h14M5 17h14"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
     case "create":
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -530,20 +542,34 @@ function InvoiceActionIcon({ kind }) {
   }
 }
 
-function InvoiceActionButton({ active = false, label, hint, kind, onClick, className = "" }) {
+function InvoiceActionButton({
+  active = false,
+  label,
+  hint,
+  kind,
+  onClick,
+  className = "",
+  iconOnly = false,
+}) {
   return (
     <button
       type="button"
-      className={`toolbar-action-btn ${active ? "active" : ""} ${className}`.trim()}
+      className={`toolbar-action-btn ${iconOnly ? "icon-only" : ""} ${
+        active ? "active" : ""
+      } ${className}`.trim()}
       onClick={onClick}
+      aria-label={label}
+      title={label}
     >
       <span className="toolbar-action-icon">
         <InvoiceActionIcon kind={kind} />
       </span>
-      <span className="toolbar-action-copy">
-        <strong>{label}</strong>
-        <small>{hint}</small>
-      </span>
+      {iconOnly ? null : (
+        <span className="toolbar-action-copy">
+          <strong>{label}</strong>
+          <small>{hint}</small>
+        </span>
+      )}
     </button>
   );
 }
@@ -551,6 +577,7 @@ function InvoiceActionButton({ active = false, label, hint, kind, onClick, class
 export default function Invoice() {
   const navigate = useNavigate();
   const receiptPreviewUrlRef = useRef(null);
+  const quickToolsMenuRef = useRef(null);
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [mobile, setMobile] = useState("");
@@ -574,6 +601,7 @@ export default function Invoice() {
   const [ocrExtractedText, setOcrExtractedText] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
   const [activeUtilityPanel, setActiveUtilityPanel] = useState("");
+  const [isQuickToolsMenuOpen, setIsQuickToolsMenuOpen] = useState(false);
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const gstAmount = (subtotal * gstRate) / 100;
@@ -639,8 +667,27 @@ export default function Invoice() {
   useEffect(() => {
     if (activeView !== "create") {
       setActiveUtilityPanel("");
+      setIsQuickToolsMenuOpen(false);
     }
   }, [activeView]);
+
+  useEffect(() => {
+    if (!isQuickToolsMenuOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (!quickToolsMenuRef.current?.contains(event.target)) {
+        setIsQuickToolsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [isQuickToolsMenuOpen]);
 
   useEffect(() => {
     let isActive = true;
@@ -1153,17 +1200,83 @@ export default function Invoice() {
     setActiveUtilityPanel((currentPanel) => (currentPanel === panelKey ? "" : panelKey));
   };
 
+  const handleQuickToolSelection = (panelKey) => {
+    toggleUtilityPanel(panelKey);
+    setIsQuickToolsMenuOpen(false);
+  };
+
   return (
     <div className="annexure invoice-page">
       <div className="page-toolbar">
         <div className="toolbar-copy">
-          <h2>
-            {activeView === "history"
-              ? "Invoice History"
-              : isEditingInvoice
-                ? "Edit Invoice"
-                : "Generate Invoice"}
-          </h2>
+          <div className="toolbar-title-row">
+            {activeView === "create" ? (
+              <div className="quick-tools-dropdown" ref={quickToolsMenuRef}>
+                <button
+                  type="button"
+                  className={`quick-tools-trigger ${isQuickToolsMenuOpen ? "active" : ""}`}
+                  aria-expanded={isQuickToolsMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label="Quick tools"
+                  title="Quick tools"
+                  onClick={() => setIsQuickToolsMenuOpen((currentValue) => !currentValue)}
+                >
+                  <InvoiceActionIcon kind="menu" />
+                </button>
+
+                {isQuickToolsMenuOpen ? (
+                  <div className="quick-tools-dropdown-menu" role="menu">
+                    <div className="quick-tools-dropdown-header">
+                      <strong>Quick Tools</strong>
+                      <small>Open invoice utilities from here.</small>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`quick-tools-dropdown-item ${
+                        activeUtilityPanel === "receipt" ? "active" : ""
+                      }`}
+                      role="menuitem"
+                      onClick={() => handleQuickToolSelection("receipt")}
+                    >
+                      <span className="quick-tools-dropdown-icon">
+                        <InvoiceActionIcon kind="receipt" />
+                      </span>
+                      <span className="quick-tools-dropdown-copy">
+                        <strong>Receipt or Image</strong>
+                        <small>Prefill invoice details from OCR</small>
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`quick-tools-dropdown-item ${
+                        activeUtilityPanel === "theme" ? "active" : ""
+                      }`}
+                      role="menuitem"
+                      onClick={() => handleQuickToolSelection("theme")}
+                    >
+                      <span className="quick-tools-dropdown-icon">
+                        <InvoiceActionIcon kind="theme" />
+                      </span>
+                      <span className="quick-tools-dropdown-copy">
+                        <strong>Invoice Theme</strong>
+                        <small>{activeBrandingTemplate.name}</small>
+                      </span>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <h2>
+              {activeView === "history"
+                ? "Invoice History"
+                : isEditingInvoice
+                  ? "Edit Invoice"
+                  : "Generate Invoice"}
+            </h2>
+          </div>
           <small>
             Signed in as <strong>{name || "Customer"}</strong>
           </small>
@@ -1175,6 +1288,7 @@ export default function Invoice() {
             label="Create Invoice"
             hint="Draft and edit"
             kind="create"
+            iconOnly
             onClick={() => setActiveView("create")}
           />
           <InvoiceActionButton
@@ -1182,6 +1296,7 @@ export default function Invoice() {
             label="Invoice History"
             hint="View saved invoices"
             kind="history"
+            iconOnly
             onClick={() => {
               setSelectedHistoryInvoice(null);
               setActiveView("history");
@@ -1191,6 +1306,7 @@ export default function Invoice() {
             label="Logout"
             hint="End this session"
             kind="logout"
+            iconOnly
             onClick={handleLogout}
           />
         </div>
@@ -1198,32 +1314,6 @@ export default function Invoice() {
 
       {activeView === "create" ? (
         <div className="invoice-create-layout">
-          <div className="invoice-tools-menu">
-            <div className="invoice-tools-copy">
-              <strong>Quick Tools</strong>
-              <small>Open theme settings or scan a receipt without leaving the invoice screen.</small>
-            </div>
-
-            <div className="invoice-tools-actions">
-              <InvoiceActionButton
-                active={activeUtilityPanel === "receipt"}
-                label="Receipt or Image"
-                hint="Prefill from OCR"
-                kind="receipt"
-                className="toolbar-tool-btn"
-                onClick={() => toggleUtilityPanel("receipt")}
-              />
-              <InvoiceActionButton
-                active={activeUtilityPanel === "theme"}
-                label="Invoice Theme"
-                hint={activeBrandingTemplate.name}
-                kind="theme"
-                className="toolbar-tool-btn"
-                onClick={() => toggleUtilityPanel("theme")}
-              />
-            </div>
-          </div>
-
           {activeUtilityPanel === "receipt" ? (
             <div className="receipt-import-panel invoice-tool-panel">
               <div className="invoice-tool-panel-header">
